@@ -33,6 +33,64 @@ This will produce:
 - `libkernel_tracer_c.so` - The profiler plugin (C version)
 - `example_app` - The example application
 
+## Troubleshooting Build Issues
+
+### CMake Error: "Could not find a package configuration file provided by rocprofiler-sdk"
+
+This is the most common build error and occurs when CMake cannot locate the ROCm Profiler SDK.
+
+#### **Solution 1: Install rocprofiler-sdk (Recommended)**
+
+If you have ROCm installed but are missing the profiler SDK development package:
+
+```bash
+# On Ubuntu/Debian-based systems
+sudo apt-get install rocprofiler-sdk-dev
+
+# Or install the full ROCm development suite
+sudo apt-get install rocm-dev
+```
+
+#### **Solution 2: Set CMAKE_PREFIX_PATH (Most Common)**
+
+If rocprofiler-sdk is already installed in `/opt/rocm` but CMake can't find it:
+
+```bash
+cmake -DCMAKE_PREFIX_PATH=/opt/rocm -B build
+cmake --build build
+```
+
+Or set it as an environment variable:
+
+```bash
+export CMAKE_PREFIX_PATH=/opt/rocm
+cmake -B build
+cmake --build build
+```
+
+#### **Solution 3: Set rocprofiler-sdk_DIR Directly**
+
+Point CMake directly to the config files:
+
+```bash
+cmake -Drocprofiler-sdk_DIR=/opt/rocm/lib/cmake/rocprofiler-sdk -B build
+cmake --build build
+```
+
+#### **Verify ROCm Installation**
+
+Check if the ROCm Profiler SDK is installed:
+
+```bash
+# Check for the config files
+ls /opt/rocm/lib/cmake/rocprofiler-sdk/
+
+# Verify ROCm installation
+rocminfo
+```
+
+If the directory doesn't exist, you need to install the `rocprofiler-sdk-dev` package.
+
 ## Usage
 
 To trace kernel calls, use `LD_PRELOAD` to load the profiler library before running your ROCm application:
