@@ -225,6 +225,57 @@ The profiler will automatically intercept and trace all kernel dispatches in you
 - Thread-safe kernel counting using atomic operations
 - Minimal performance overhead
 
+## Timeline Support and Limitations
+
+### Callback Tracing vs Buffer Tracing
+
+The ROCm Profiler SDK provides two tracing modes:
+
+1. **Callback Tracing** (used by this tool)
+   - ✅ Real-time synchronous callbacks
+   - ✅ Immediate output as kernels are dispatched
+   - ✅ Simple implementation
+   - ❌ **No kernel execution timestamps**
+   - ❌ Cannot measure actual kernel duration
+
+2. **Buffer Tracing** (not currently implemented)
+   - ✅ Accurate GPU timestamps (DispatchNs, BeginNs, EndNs, CompleteNs)
+   - ✅ Kernel execution duration measurements
+   - ✅ Timeline analysis capabilities
+   - ❌ Asynchronous buffered output
+   - ❌ More complex implementation
+   - ❌ Requires buffer management
+
+### Current Limitations
+
+The current implementation uses **callback tracing**, which provides rich dispatch information but **does not include kernel execution timestamps**. The `start_timestamp` and `end_timestamp` fields in `rocprofiler_callback_tracing_kernel_dispatch_data_t` are always `0` in callback tracing mode.
+
+**What you CAN get:**
+- Kernel name and dispatch information
+- Grid and workgroup dimensions
+- Memory segment sizes
+- Dispatch order and correlation IDs
+
+**What you CANNOT get:**
+- Actual kernel execution start/end times
+- Kernel execution duration
+- GPU timeline information
+
+### Adding Timeline Support
+
+To add accurate timeline support with kernel execution timestamps, the tracer would need to be redesigned to use **buffer tracing** mode:
+
+```cpp
+// Example: Configure buffer tracing instead of callback tracing
+rocprofiler_configure_buffer_tracing_service(
+    client_ctx,
+    ROCPROFILER_BUFFER_TRACING_KERNEL_DISPATCH,
+    // ... buffer configuration
+);
+```
+
+This would enable access to accurate GPU timestamps but would change the output model from real-time to buffered/asynchronous.
+
 ## License
 
 This is a sample/demonstration project for educational purposes.
