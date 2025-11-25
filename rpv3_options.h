@@ -23,7 +23,7 @@ extern "C" {
 #define RPV3_VERSION "1.0.0"
 #define RPV3_VERSION_MAJOR 1
 #define RPV3_VERSION_MINOR 0
-#define RPV3_VERSION_PATCH 0
+#define RPV3_VERSION_PATCH 1
 
 /* Return codes */
 #define RPV3_OPTIONS_CONTINUE 0  /* Continue with normal initialization */
