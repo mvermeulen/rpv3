@@ -106,6 +106,28 @@ Or from the project root:
 LD_PRELOAD=./build/libkernel_tracer.so ./build/example_app
 ```
 
+## Configuration Options
+
+The profiler supports configuration via the `RPV3_OPTIONS` environment variable. Options are space-separated.
+
+### Available Options
+
+- `--version` - Print version information and exit without initializing the profiler
+- `--help` or `-h` - Print help message and exit without initializing the profiler
+
+### Examples
+
+```bash
+# Print version information
+RPV3_OPTIONS="--version" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# Print help message
+RPV3_OPTIONS="--help" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# Multiple options can be combined (space-separated)
+RPV3_OPTIONS="--version --help" LD_PRELOAD=./libkernel_tracer.so ./example_app
+```
+
 ## Expected Output
 
 When running the example application with the profiler, you should see detailed output like:

@@ -19,6 +19,8 @@
 #include <regex>
 #include <cxxabi.h>
 
+#include "rpv3_options.h"
+
 namespace {
     std::atomic<uint64_t> kernel_count{0};
     rocprofiler_context_id_t client_ctx = {};
@@ -211,6 +213,11 @@ extern "C" {
                          const char* runtime_version,
                          uint32_t priority,
                          rocprofiler_client_id_t* id) {
+        
+        // Parse options from environment variable
+        if (rpv3_parse_options() == RPV3_OPTIONS_EXIT) {
+            return nullptr;  // Exit early without initializing profiler
+        }
         
         // Compute version components
         uint32_t major = version / 10000;

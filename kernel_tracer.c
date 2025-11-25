@@ -3,6 +3,9 @@
  * Demonstrates using rocprofiler-sdk to trace kernel dispatches with detailed information
  */
 
+/* Enable POSIX features for strdup */
+#define _POSIX_C_SOURCE 200809L
+
 /* Include HIP headers first to satisfy RCCL dependencies in rocprofiler headers */
 #define __HIP_PLATFORM_AMD__
 #include <hip/hip_runtime_api.h>
@@ -15,6 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdatomic.h>
+
+#include "rpv3_options.h"
 
 /* Simple kernel name storage (array-based for C compatibility) */
 #define MAX_KERNELS 256
@@ -238,6 +243,11 @@ rocprofiler_configure(uint32_t version,
                      const char* runtime_version,
                      uint32_t priority,
                      rocprofiler_client_id_t* id) {
+    
+    /* Parse options from environment variable */
+    if (rpv3_parse_options() == RPV3_OPTIONS_EXIT) {
+        return NULL;  /* Exit early without initializing profiler */
+    }
     
     /* Compute version components */
     uint32_t major = version / 10000;
