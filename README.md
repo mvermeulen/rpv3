@@ -20,6 +20,12 @@ rpv3/
 ├── rpv3_options.c             # Options parsing implementation (shared)
 ├── rpv3_options.h             # Options parsing header
 ├── example_app.cpp            # Sample HIP application for testing
+├── tests/                     # Test suite
+│   ├── test_rpv3_options.c    # Unit tests for options parser
+│   ├── test_integration.sh    # Integration tests
+│   ├── test_regression.sh     # Regression tests
+│   ├── run_tests.sh           # Master test runner
+│   └── README.md              # Testing documentation
 ├── Makefile                   # Make-based build system
 ├── CMakeLists.txt             # CMake-based build system
 └── README.md                  # This file
@@ -112,6 +118,48 @@ rocminfo
 ```
 
 If the directory doesn't exist, you need to install the `rocprofiler-sdk-dev` package.
+
+## Testing
+
+The project includes a comprehensive test suite to ensure continued functionality.
+
+### Running Tests
+
+```bash
+# Run all tests (unit, integration, and regression)
+make test
+
+# Or using CMake/CTest
+cd build
+ctest --output-on-failure
+
+# Run specific test suites
+make test-unit          # Unit tests only
+make test-integration   # Integration tests only
+make test-regression    # Regression tests only
+```
+
+### Test Coverage
+
+The test suite includes:
+
+- **Unit Tests** - Test the options parser (`rpv3_options.c`)
+  - Environment variable parsing
+  - Option handling (`--version`, `--help`, etc.)
+  - Edge cases and error handling
+
+- **Integration Tests** - End-to-end testing
+  - Library loading verification
+  - Kernel tracing with example application
+  - Output format validation
+  - C vs C++ implementation comparison
+
+- **Regression Tests** - Backward compatibility
+  - Output format stability
+  - Version string format
+  - No unexpected breaking changes
+
+See [`tests/README.md`](tests/README.md) for detailed testing documentation.
 
 ## Usage
 

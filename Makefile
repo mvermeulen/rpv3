@@ -61,6 +61,22 @@ help:
 	@echo "Targets:"
 	@echo "  make all     - Build both plugin and example (default)"
 	@echo "  make clean   - Remove built files"
+	@echo "  make test    - Run all tests"
 	@echo ""
 	@echo "Usage:"
 	@echo "  HSA_TOOLS_LIB=./libkernel_tracer.so ./example_app"
+
+# Test targets
+test: all
+	@cd tests && ./run_tests.sh
+
+test-unit: all
+	@cd tests && ./run_unit_tests.sh
+
+test-integration: all
+	@cd tests && ./test_integration.sh
+
+test-regression: all
+	@cd tests && ./test_regression.sh
+
+.PHONY: test test-unit test-integration test-regression

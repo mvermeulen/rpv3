@@ -21,3 +21,8 @@ Makefile.cmake
 # OS
 .DS_Store
 Thumbs.db
+
+# Test artifacts
+tests/test_rpv3_options
+tests/*.tmp
+tests/*.log

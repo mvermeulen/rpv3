@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(rocprof_kernel_tracer VERSION 1.0.0 LANGUAGES C CXX)
+project(rocprof_kernel_tracer VERSION 1.0.3 LANGUAGES C CXX)
 
 # Set C standard
 set(CMAKE_C_STANDARD 11)
@@ -64,6 +64,10 @@ add_custom_command(
 )
 
 add_custom_target(example_app ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/example_app)
+
+# Enable testing
+enable_testing()
+add_subdirectory(tests)
 
 # Installation rules
 install(TARGETS kernel_tracer kernel_tracer_c

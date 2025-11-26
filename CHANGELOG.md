@@ -5,6 +5,26 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3] - 2025-11-25
+
+### Added
+- Comprehensive testing infrastructure
+  - Unit tests for options parser (`tests/test_rpv3_options.c`) with 11 test cases
+  - Integration tests (`tests/test_integration.sh`) with 10 test scenarios
+  - Regression tests (`tests/test_regression.sh`) with 10 test scenarios
+  - Test utilities (`tests/test_utils.sh`) with color-coded output and assertion helpers
+  - Master test runner (`tests/run_tests.sh`)
+- CMake/CTest integration for automated testing
+- Makefile test targets: `test`, `test-unit`, `test-integration`, `test-regression`
+- Testing documentation in `tests/README.md`
+- Testing section in main README with quick start guide
+- Test artifacts added to `.gitignore`
+
+### Changed
+- Updated project structure in README to include `tests/` directory
+- CMakeLists.txt now includes `enable_testing()` and test subdirectory
+- Makefile help output now mentions test targets
+
 ## [1.0.2] - 2025-11-25
 
 ### Added
