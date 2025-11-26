@@ -98,17 +98,18 @@ fi
 # 5. Check User Permissions
 print_header "User Permissions"
 CURRENT_USER=$(whoami)
-USER_GROUPS=$(groups)
+USER_GROUPS_RAW=$(groups)
+USER_GROUPS=" $USER_GROUPS_RAW " # Pad with spaces for whole-word matching
 print_info "Current User: $CURRENT_USER"
-print_info "Groups: $USER_GROUPS"
+print_info "Groups: $USER_GROUPS_RAW"
 
-if [[ "$USER_GROUPS" == *"render"* ]] && [[ "$USER_GROUPS" == *"video"* ]]; then
+if [[ "$USER_GROUPS" == *" render "* ]] && [[ "$USER_GROUPS" == *" video "* ]]; then
     print_pass "User is in 'render' and 'video' groups"
 else
-    if [[ "$USER_GROUPS" != *"render"* ]]; then
+    if [[ "$USER_GROUPS" != *" render "* ]]; then
         print_warn "User is NOT in 'render' group. Required for direct GPU access."
     fi
-    if [[ "$USER_GROUPS" != *"video"* ]]; then
+    if [[ "$USER_GROUPS" != *" video "* ]]; then
         print_warn "User is NOT in 'video' group. Often required for GPU access."
     fi
     print_info "Fix: sudo usermod -aG render,video $CURRENT_USER"
