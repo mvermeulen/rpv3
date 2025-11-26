@@ -98,8 +98,8 @@ assert_exit_code 0 $exit_code "Example app exits successfully with C profiler"
 # Test 9: Grid and workgroup dimensions
 print_info "Testing grid and workgroup dimension extraction..."
 output=$(LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
-# Vector kernels should have grid size [4096, 1, 1] and workgroup [256, 1, 1]
-assert_contains "$output" "Grid Size: \[4096, 1, 1\]" "Vector kernel has correct grid size"
+# Vector kernels should have grid size [1048576, 1, 1] and workgroup [256, 1, 1]
+assert_contains "$output" "Grid Size: \[1048576, 1, 1\]" "Vector kernel has correct grid size"
 assert_contains "$output" "Workgroup Size: \[256, 1, 1\]" "Vector kernel has correct workgroup size"
 # Matrix transpose should have 2D grid
 assert_contains "$output" "Grid Size: \[512, 512, 1\]" "Matrix kernel has correct grid size"
