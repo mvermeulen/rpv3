@@ -94,4 +94,81 @@ else
     print_warn "rocminfo command not found."
 fi
 
+
+# 5. Check User Permissions
+print_header "User Permissions"
+CURRENT_USER=$(whoami)
+GROUPS=$(groups)
+print_info "Current User: $CURRENT_USER"
+print_info "Groups: $GROUPS"
+
+if [[ "$GROUPS" == *"render"* ]] && [[ "$GROUPS" == *"video"* ]]; then
+    print_pass "User is in 'render' and 'video' groups"
+else
+    if [[ "$GROUPS" != *"render"* ]]; then
+        print_warn "User is NOT in 'render' group. Required for direct GPU access."
+    fi
+    if [[ "$GROUPS" != *"video"* ]]; then
+        print_warn "User is NOT in 'video' group. Often required for GPU access."
+    fi
+    print_info "Fix: sudo usermod -aG render,video $CURRENT_USER"
+fi
+
+# 6. Check Device Permissions
+print_header "Device Permissions"
+if [ -w "/dev/kfd" ]; then
+    print_pass "Write access to /dev/kfd"
+else
+    print_fail "No write access to /dev/kfd"
+fi
+
+RENDER_DEV=$(ls /dev/dri/renderD* 2>/dev/null | head -n 1)
+if [ -n "$RENDER_DEV" ]; then
+    if [ -w "$RENDER_DEV" ]; then
+        print_pass "Write access to $RENDER_DEV"
+    else
+        print_fail "No write access to $RENDER_DEV"
+    fi
+else
+    print_fail "No render device found in /dev/dri/"
+fi
+
+# 7. Check Perf Event Paranoid
+print_header "Perf Event Paranoid"
+if [ -f "/proc/sys/kernel/perf_event_paranoid" ]; then
+    PARANOID=$(cat /proc/sys/kernel/perf_event_paranoid)
+    print_info "Value: $PARANOID"
+    if [ "$PARANOID" -le 2 ]; then
+        print_pass "perf_event_paranoid is <= 2"
+    else
+        print_warn "perf_event_paranoid is > 2 ($PARANOID). This may block performance counters."
+        print_info "Try: sudo sh -c 'echo 2 > /proc/sys/kernel/perf_event_paranoid'"
+    fi
+else
+    print_info "/proc/sys/kernel/perf_event_paranoid not found (OK for some containers)"
+fi
+
+# 8. Check Environment Variables
+print_header "Environment Variables"
+if [ -n "$HSA_OVERRIDE_GFX_VERSION" ]; then
+    print_warn "HSA_OVERRIDE_GFX_VERSION is set to '$HSA_OVERRIDE_GFX_VERSION'"
+    print_info "This can cause mismatches if not set correctly."
+else
+    print_pass "HSA_OVERRIDE_GFX_VERSION is not set"
+fi
+
+# 9. Check dmesg for AMDGPU errors (if possible)
+print_header "Kernel Log (dmesg)"
+if dmesg &> /dev/null; then
+    ERRORS=$(dmesg | grep -i "amdgpu" | grep -iE "error|fault|fail|reject" | tail -n 5)
+    if [ -n "$ERRORS" ]; then
+        print_warn "Found recent AMDGPU errors in dmesg:"
+        echo "$ERRORS"
+    else
+        print_pass "No recent AMDGPU errors found in tail of dmesg"
+    fi
+else
+    print_info "Cannot read dmesg (permission denied). Skipping log check."
+fi
+
 echo ""
