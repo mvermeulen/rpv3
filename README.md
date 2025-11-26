@@ -21,14 +21,19 @@ rpv3/
 ├── rpv3_options.h             # Options parsing header
 ├── example_app.cpp            # Sample HIP application for testing
 ├── docs/                      # Documentation
-│   └── counter_collection_research.md  # Performance counter collection research
-│   └── [Kernel Argument Access Research](docs/research_kernel_args.md)
+│   ├── counter_collection_research.md  # Performance counter collection research
+│   └── research_kernel_args.md         # Kernel argument access research
 ├── tests/                     # Test suite
 │   ├── test_rpv3_options.c    # Unit tests for options parser
 │   ├── test_integration.sh    # Integration tests
 │   ├── test_regression.sh     # Regression tests
+│   ├── test_counters.sh       # Counter collection tests
 │   ├── run_tests.sh           # Master test runner
 │   └── README.md              # Testing documentation
+├── utils/                     # Utility tools
+│   ├── diagnose_counters.cpp  # Tool to list supported counters
+│   ├── check_status.cpp       # Tool to decode status codes
+│   └── README.md              # Utilities documentation
 ├── Makefile                   # Make-based build system
 ├── CMakeLists.txt             # CMake-based build system
 └── README.md                  # This file
@@ -156,6 +161,7 @@ The test suite includes:
   - Kernel tracing with example application
   - Output format validation
   - C vs C++ implementation comparison
+  - **Counter Collection Tests** - Verify `--counter` option and hardware support handling
 
 - **Regression Tests** - Backward compatibility
   - Output format stability
