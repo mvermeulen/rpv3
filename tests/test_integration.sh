@@ -40,7 +40,7 @@ assert_file_exists "$BUILD_DIR/example_app" "Example app exists"
 print_info "Testing --version option with C++ library..."
 output=$(RPV3_OPTIONS="--version" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1 || true)
 assert_contains "$output" "RPV3 Kernel Tracer version" "Version output contains version string"
-assert_contains "$output" "1.2.0" "Version output contains correct version number"
+assert_contains "$output" "1.2.1" "Version output contains correct version number"
 
 
 # Test 3: Version option (C library)

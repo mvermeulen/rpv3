@@ -13,6 +13,14 @@ make utils
 ./utils/diagnose_counters
 ```
 
+### `check_requirements.sh`
+Checks system software requirements for enabling performance counters, including Kernel version, ROCm version, and the `amdgpu.ppfeaturemask` parameter.
+
+**Usage:**
+```bash
+./utils/check_requirements.sh
+```
+
 ### `check_status`
 A simple utility to print the string representation of a `rocprofiler_status_t` code. Useful for decoding error codes returned by the SDK.
 
