@@ -5,6 +5,18 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2025-11-26
+
+### Added
+- **Documentation**: Counter collection research for future implementation
+  - Comprehensive research document on rocprofiler-sdk counter collection service
+  - Detailed analysis of dispatch counting mode for per-kernel performance counters
+  - Performance counter recommendations for compute vs memory bound diagnosis
+  - API examples and integration strategies with current RPV3 implementation
+  - Local sample code references (`/opt/rocm/share/rocprofiler-sdk/samples/counter_collection/`)
+  - Created `docs/` directory for project documentation
+  - Updated README project structure to include docs directory
+
 ## [1.1.1] - 2025-11-26
 
 ### Changed

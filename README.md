@@ -20,6 +20,8 @@ rpv3/
 ├── rpv3_options.c             # Options parsing implementation (shared)
 ├── rpv3_options.h             # Options parsing header
 ├── example_app.cpp            # Sample HIP application for testing
+├── docs/                      # Documentation
+│   └── counter_collection_research.md  # Performance counter collection research
 ├── tests/                     # Test suite
 │   ├── test_rpv3_options.c    # Unit tests for options parser
 │   ├── test_integration.sh    # Integration tests
