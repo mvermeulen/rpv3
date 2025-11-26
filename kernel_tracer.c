@@ -13,6 +13,8 @@
 #include <rocprofiler-sdk/registration.h>
 #include <rocprofiler-sdk/rocprofiler.h>
 #include <rocprofiler-sdk/callback_tracing.h>
+#include <rocprofiler-sdk/buffer.h>
+#include <rocprofiler-sdk/buffer_tracing.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,6 +38,11 @@ static rocprofiler_context_id_t client_ctx = {0};
 static rocprofiler_client_id_t* client_id = NULL;
 static kernel_info_t kernel_table[MAX_KERNELS];
 static atomic_int kernel_table_size = ATOMIC_VAR_INIT(0);
+
+/* Timeline mode state */
+static int timeline_enabled = 0;
+static uint64_t first_kernel_timestamp = 0;
+static rocprofiler_buffer_id_t trace_buffer = {0};
 
 /* Helper function to store kernel name */
 void store_kernel_name(rocprofiler_kernel_id_t kernel_id, const char* name) {
@@ -94,6 +101,80 @@ void kernel_symbol_callback(rocprofiler_callback_tracing_record_t record,
         }
     }
 }
+
+/* Buffer callback function for timeline mode (batch processing) */
+void timeline_buffer_callback(
+    rocprofiler_context_id_t context,
+    rocprofiler_buffer_id_t buffer_id,
+    rocprofiler_record_header_t** headers,
+    size_t num_headers,
+    void* user_data,
+    uint64_t drop_count
+) {
+    (void) context;
+    (void) buffer_id;
+    (void) user_data;
+    
+    if (drop_count > 0) {
+        fprintf(stderr, "[Kernel Tracer] Warning: Dropped %lu records\n", (unsigned long)drop_count);
+    }
+    
+    /* Process batch of records */
+    for (size_t i = 0; i < num_headers; i++) {
+        rocprofiler_record_header_t* header = headers[i];
+        
+        /* Only process kernel dispatch records */
+        if (header->category == ROCPROFILER_BUFFER_CATEGORY_TRACING &&
+            header->kind == ROCPROFILER_BUFFER_TRACING_KERNEL_DISPATCH) {
+            
+            rocprofiler_buffer_tracing_kernel_dispatch_record_t* record =
+                (rocprofiler_buffer_tracing_kernel_dispatch_record_t*)header->payload;
+            
+            uint64_t count = atomic_fetch_add(&kernel_count, 1) + 1;
+            
+            /* Extract timestamps (guaranteed non-zero in buffer mode) */
+            uint64_t start_ns = record->start_timestamp;
+            uint64_t end_ns = record->end_timestamp;
+            uint64_t duration_ns = end_ns - start_ns;
+            
+            /* Calculate time since first kernel */
+            if (first_kernel_timestamp == 0) {
+                first_kernel_timestamp = start_ns;
+            }
+            double time_since_start_ms = (start_ns - first_kernel_timestamp) / 1000000.0;
+            
+            /* Look up kernel name */
+            const char* kernel_name = lookup_kernel_name(record->dispatch_info.kernel_id);
+            
+            /* Print all dispatch information with timeline data */
+            printf("\n[Kernel Trace #%lu]\n", (unsigned long)count);
+            printf("  Kernel Name: %s\n", kernel_name);
+            printf("  Thread ID: %lu\n", (unsigned long)record->thread_id);
+            printf("  Correlation ID: %lu\n", (unsigned long)record->correlation_id.internal);
+            printf("  Kernel ID: %lu\n", (unsigned long)record->dispatch_info.kernel_id);
+            printf("  Dispatch ID: %lu\n", (unsigned long)record->dispatch_info.dispatch_id);
+            printf("  Grid Size: [%u, %u, %u]\n",
+                   record->dispatch_info.grid_size.x,
+                   record->dispatch_info.grid_size.y,
+                   record->dispatch_info.grid_size.z);
+            printf("  Workgroup Size: [%u, %u, %u]\n",
+                   record->dispatch_info.workgroup_size.x,
+                   record->dispatch_info.workgroup_size.y,
+                   record->dispatch_info.workgroup_size.z);
+            printf("  Private Segment Size: %u bytes (scratch memory per work-item)\n",
+                   record->dispatch_info.private_segment_size);
+            printf("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
+                   record->dispatch_info.group_segment_size);
+            
+            /* Timeline information (only in buffer mode) */
+            printf("  Start Timestamp: %lu ns\n", (unsigned long)start_ns);
+            printf("  End Timestamp: %lu ns\n", (unsigned long)end_ns);
+            printf("  Duration: %.3f μs\n", duration_ns / 1000.0);
+            printf("  Time Since Start: %.3f ms\n", time_since_start_ms);
+        }
+    }
+}
+
 
 /* Callback function for kernel dispatch events */
 void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
@@ -159,13 +240,109 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
     }
 }
 
+/* Setup buffer tracing (for timeline mode) */
+int setup_buffer_tracing() {
+    printf("[Kernel Tracer] Setting up buffer tracing for timeline mode...\n");
+    
+    /* Create buffer */
+    const size_t buffer_size = 8192;      /* 8 KB */
+    const size_t buffer_watermark = 7168; /* Flush at 87.5% full */
+    
+    rocprofiler_status_t status = rocprofiler_create_buffer(
+        client_ctx,
+        buffer_size,
+        buffer_watermark,
+        ROCPROFILER_BUFFER_POLICY_LOSSLESS,  /* Don't drop records */
+        timeline_buffer_callback,
+        NULL,  /* callback data */
+        &trace_buffer
+    );
+    
+    if (status != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to create buffer\n");
+        return -1;
+    }
+    
+    /* Configure buffer tracing for kernel dispatches */
+    status = rocprofiler_configure_buffer_tracing_service(
+        client_ctx,
+        ROCPROFILER_BUFFER_TRACING_KERNEL_DISPATCH,
+        NULL,  /* operations (NULL = all) */
+        0,     /* operations count */
+        trace_buffer
+    );
+    
+    if (status != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to configure buffer tracing\n");
+        return -1;
+    }
+    
+    /* Still need code object callback for kernel names */
+    status = rocprofiler_configure_callback_tracing_service(
+        client_ctx,
+        ROCPROFILER_CALLBACK_TRACING_CODE_OBJECT,
+        NULL,
+        0,
+        kernel_symbol_callback,
+        NULL
+    );
+    
+    if (status != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to configure code object callback\n");
+        return -1;
+    }
+    
+    return 0;
+}
+
+/* Setup callback tracing (for non-timeline mode) */
+int setup_callback_tracing() {
+    printf("[Kernel Tracer] Setting up callback tracing...\n");
+    
+    /* Configure callback tracing for code object/kernel symbol registration */
+    if (rocprofiler_configure_callback_tracing_service(
+            client_ctx,
+            ROCPROFILER_CALLBACK_TRACING_CODE_OBJECT,
+            NULL,
+            0,
+            kernel_symbol_callback,
+            NULL
+        ) != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to configure code object callback tracing\n");
+        return -1;
+    }
+    
+    /* Configure callback tracing for kernel dispatches */
+    if (rocprofiler_configure_callback_tracing_service(
+            client_ctx,
+            ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH,
+            NULL,
+            0,
+            kernel_dispatch_callback,
+            NULL
+        ) != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to configure kernel dispatch callback tracing\n");
+        return -1;
+    }
+    
+    return 0;
+}
+
 /* Tool initialization callback */
+
 int tool_init(rocprofiler_client_finalize_t fini_func,
               void* tool_data) {
     (void) fini_func;
     (void) tool_data;
     
     printf("[Kernel Tracer] Initializing profiler tool...\n");
+    
+    /* Check if timeline mode is enabled (from rpv3_options) */
+    timeline_enabled = (rpv3_timeline_enabled != 0);
+    
+    if (timeline_enabled) {
+        printf("[Kernel Tracer] Timeline mode enabled\n");
+    }
     
     /* Initialize kernel table */
     memset(kernel_table, 0, sizeof(kernel_table));
@@ -176,29 +353,15 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
         return -1;
     }
     
-    /* Configure callback tracing for code object/kernel symbol registration */
-    if (rocprofiler_configure_callback_tracing_service(
-            client_ctx,
-            ROCPROFILER_CALLBACK_TRACING_CODE_OBJECT,
-            NULL,  /* operations (NULL = all) */
-            0,     /* operations count */
-            kernel_symbol_callback,
-            NULL   /* callback data */
-        ) != ROCPROFILER_STATUS_SUCCESS) {
-        fprintf(stderr, "[Kernel Tracer] Failed to configure code object callback tracing\n");
-        return -1;
+    /* Setup tracing based on mode */
+    int result;
+    if (timeline_enabled) {
+        result = setup_buffer_tracing();
+    } else {
+        result = setup_callback_tracing();
     }
     
-    /* Configure callback tracing for kernel dispatches */
-    if (rocprofiler_configure_callback_tracing_service(
-            client_ctx,
-            ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH,
-            NULL,  /* operations (NULL = all) */
-            0,     /* operations count */
-            kernel_dispatch_callback,
-            NULL   /* callback data */
-        ) != ROCPROFILER_STATUS_SUCCESS) {
-        fprintf(stderr, "[Kernel Tracer] Failed to configure kernel dispatch callback tracing\n");
+    if (result != 0) {
         return -1;
     }
     
@@ -226,6 +389,12 @@ void tool_fini(void* tool_data) {
     (void) tool_data;
     
     printf("\n[Kernel Tracer] Finalizing profiler tool...\n");
+    
+    /* Flush buffer if in timeline mode */
+    if (timeline_enabled && trace_buffer.handle != 0) {
+        rocprofiler_flush_buffer(trace_buffer);
+    }
+    
     printf("[Kernel Tracer] Total kernels traced: %lu\n", 
            (unsigned long)atomic_load(&kernel_count));
     printf("[Kernel Tracer] Unique kernel symbols tracked: %d\n",
@@ -234,6 +403,11 @@ void tool_fini(void* tool_data) {
     /* Stop context if still active */
     if (client_ctx.handle != 0) {
         rocprofiler_stop_context(client_ctx);
+    }
+    
+    /* Destroy buffer if created */
+    if (timeline_enabled && trace_buffer.handle != 0) {
+        rocprofiler_destroy_buffer(trace_buffer);
     }
 }
 

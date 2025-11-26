@@ -40,7 +40,8 @@ assert_file_exists "$BUILD_DIR/example_app" "Example app exists"
 print_info "Testing --version option with C++ library..."
 output=$(RPV3_OPTIONS="--version" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1 || true)
 assert_contains "$output" "RPV3 Kernel Tracer version" "Version output contains version string"
-assert_contains "$output" "1.0.2" "Version output contains correct version number"
+assert_contains "$output" "1.1.0" "Version output contains correct version number"
+
 
 # Test 3: Version option (C library)
 print_info "Testing --version option with C library..."
@@ -109,5 +110,67 @@ print_info "Testing unknown option handling..."
 output=$(RPV3_OPTIONS="--unknown-option" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
 assert_contains "$output" "Unknown option" "Unknown option produces warning"
 assert_contains "$output" "Kernel Trace" "Profiler continues after unknown option"
+
+# Test 11: Timeline mode (C++ library)
+print_info "Testing --timeline option with C++ library..."
+output=$(RPV3_OPTIONS="--timeline" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
+assert_contains "$output" "Timeline mode enabled" "Timeline mode is enabled"
+assert_contains "$output" "Setting up buffer tracing" "Buffer tracing is configured"
+assert_contains "$output" "Start Timestamp:" "Timeline output includes start timestamp"
+assert_contains "$output" "End Timestamp:" "Timeline output includes end timestamp"
+assert_contains "$output" "Duration:.*μs" "Timeline output includes duration"
+assert_contains "$output" "Time Since Start:.*ms" "Timeline output includes time since start"
+assert_contains "$output" "Kernel Trace #1" "First kernel is traced in timeline mode"
+assert_contains "$output" "Kernel Trace #2" "Second kernel is traced in timeline mode"
+assert_contains "$output" "Kernel Trace #3" "Third kernel is traced in timeline mode"
+
+# Test 12: Timeline mode (C library)
+print_info "Testing --timeline option with C library..."
+output=$(RPV3_OPTIONS="--timeline" LD_PRELOAD="$BUILD_DIR/libkernel_tracer_c.so" "$BUILD_DIR/example_app" 2>&1)
+assert_contains "$output" "Timeline mode enabled" "C library timeline mode is enabled"
+assert_contains "$output" "Start Timestamp:" "C library timeline output includes start timestamp"
+assert_contains "$output" "Duration:.*μs" "C library timeline output includes duration"
+assert_contains "$output" "Time Since Start:.*ms" "C library timeline output includes time since start"
+
+# Test 13: Timeline timestamps are non-zero
+print_info "Testing timeline timestamps are non-zero..."
+output=$(RPV3_OPTIONS="--timeline" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
+# Extract a timestamp value and verify it's not zero
+timestamp=$(echo "$output" | grep "Start Timestamp:" | head -1 | grep -o "[0-9]\+" | head -1)
+if [ -n "$timestamp" ] && [ "$timestamp" -gt 0 ]; then
+    print_pass "Timeline timestamps are non-zero (found: $timestamp ns)"
+    TESTS_PASSED=$((TESTS_PASSED + 1))
+else
+    print_fail "Timeline timestamps are non-zero"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+TESTS_RUN=$((TESTS_RUN + 1))
+
+# Test 14: Timeline duration is reasonable
+print_info "Testing timeline duration calculations..."
+output=$(RPV3_OPTIONS="--timeline" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
+# Extract duration and verify it's in a reasonable range (1-1000 μs for these simple kernels)
+duration=$(echo "$output" | grep "Duration:" | head -1 | grep -o "[0-9.]\+" | head -1)
+if [ -n "$duration" ]; then
+    # Use bc for floating point comparison if available, otherwise use awk
+    if command -v bc &> /dev/null; then
+        is_valid=$(echo "$duration > 0 && $duration < 1000" | bc)
+    else
+        is_valid=$(awk -v d="$duration" 'BEGIN { print (d > 0 && d < 1000) ? 1 : 0 }')
+    fi
+    
+    if [ "$is_valid" = "1" ]; then
+        print_pass "Timeline duration is reasonable (found: $duration μs)"
+        TESTS_PASSED=$((TESTS_PASSED + 1))
+    else
+        print_fail "Timeline duration is reasonable (found: $duration μs, expected 0-1000)"
+        TESTS_FAILED=$((TESTS_FAILED + 1))
+    fi
+else
+    print_fail "Timeline duration is reasonable (no duration found)"
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+fi
+TESTS_RUN=$((TESTS_RUN + 1))
+
 
 print_summary

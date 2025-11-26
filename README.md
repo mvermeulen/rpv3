@@ -184,6 +184,7 @@ The profiler supports configuration via the `RPV3_OPTIONS` environment variable.
 
 - `--version` - Print version information and exit without initializing the profiler
 - `--help` or `-h` - Print help message and exit without initializing the profiler
+- `--timeline` - Enable timeline mode with GPU timestamps (uses buffer tracing)
 
 ### Examples
 
@@ -194,9 +195,22 @@ RPV3_OPTIONS="--version" LD_PRELOAD=./libkernel_tracer.so ./example_app
 # Print help message
 RPV3_OPTIONS="--help" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
+# Enable timeline mode with GPU timestamps
+RPV3_OPTIONS="--timeline" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
 # Multiple options can be combined (space-separated)
 RPV3_OPTIONS="--version --help" LD_PRELOAD=./libkernel_tracer.so ./example_app
 ```
+
+### Timeline Mode
+
+When `--timeline` is enabled, the profiler switches from callback tracing to buffer tracing mode, which provides:
+
+- **GPU Timestamps**: Accurate kernel start and end times in nanoseconds
+- **Duration**: Kernel execution time in microseconds
+- **Time Since Start**: Elapsed time since the first kernel dispatch in milliseconds
+
+**Note**: Timeline mode uses buffered output, so kernel traces appear after kernels complete rather than in real-time.
 
 ## Expected Output
 
@@ -264,6 +278,66 @@ Results verification:
 
 The C version produces similar output but with mangled kernel names (e.g., `_Z9vectorAddPKfS0_Pfi.kd` instead of `vectorAdd(...)`). All other information is identical.
 
+### Timeline Mode (With `--timeline` Option)
+
+When timeline mode is enabled, the output includes GPU timestamps:
+
+```
+[RPV3] Timeline mode enabled
+[Kernel Tracer] Configuring profiler v1.0.0 [1.0.0] (priority: 0)
+[Kernel Tracer] Initializing profiler tool...
+[Kernel Tracer] Timeline mode enabled
+[Kernel Tracer] Setting up buffer tracing for timeline mode...
+[Kernel Tracer] Profiler initialized successfully
+=== ROCm Kernel Tracing Example ===
+
+Using device: AMD Radeon Graphics
+
+Launching vector addition kernel...
+Launching vector multiplication kernel...
+Launching matrix transpose kernel...
+
+All kernels completed successfully!
+Results verification:
+  Vector Addition: PASS
+  Vector Multiplication: PASS
+  Matrix Transpose: PASS
+
+[Kernel Tracer] Finalizing profiler tool...
+
+[Kernel Trace #1]
+  Kernel Name: vectorAdd(float const*, float const*, float*, int)
+  Thread ID: 6215
+  Correlation ID: 1
+  Kernel ID: 18
+  Dispatch ID: 1
+  Grid Size: [1048576, 1, 1]
+  Workgroup Size: [256, 1, 1]
+  Private Segment Size: 0 bytes (scratch memory per work-item)
+  Group Segment Size: 0 bytes (LDS memory per work-group)
+  Start Timestamp: 961951699264 ns
+  End Timestamp: 961951727998 ns
+  Duration: 28.734 μs
+  Time Since Start: 0.000 ms
+
+[Kernel Trace #2]
+  Kernel Name: vectorMul(float const*, float const*, float*, int)
+  ...
+  Duration: 27.412 μs
+  Time Since Start: 1.010 ms
+
+[Kernel Trace #3]
+  Kernel Name: matrixTranspose(float const*, float*, int, int)
+  ...
+  Duration: 41.759 μs
+  Time Since Start: 1.441 ms
+
+[Kernel Tracer] Total kernels traced: 3
+[Kernel Tracer] Unique kernel symbols tracked: 18
+```
+
+**Note**: In timeline mode, kernel traces appear after all kernels complete (buffered output) rather than in real-time.
+
 ## How It Works
 
 ### Profiler Plugin (`kernel_tracer.cpp` / `kernel_tracer.c`)
@@ -327,56 +401,50 @@ The profiler will automatically intercept and trace all kernel dispatches in you
 - Supports `--version`, `--help`, and future extensibility
 - Pure C implementation ensures compatibility with both C and C++ libraries
 
-## Timeline Support and Limitations
+## Timeline Support
 
-### Callback Tracing vs Buffer Tracing
+### Implementation
 
-The ROCm Profiler SDK provides two tracing modes:
+The ROCm Profiler SDK provides two tracing modes, and RPV3 supports both:
 
-1. **Callback Tracing** (used by this tool)
+1. **Callback Tracing** (default mode)
    - ✅ Real-time synchronous callbacks
    - ✅ Immediate output as kernels are dispatched
    - ✅ Simple implementation
-   - ❌ **No kernel execution timestamps**
-   - ❌ Cannot measure actual kernel duration
+   - ❌ No kernel execution timestamps
 
-2. **Buffer Tracing** (not currently implemented)
-   - ✅ Accurate GPU timestamps (DispatchNs, BeginNs, EndNs, CompleteNs)
+2. **Buffer Tracing** (enabled with `--timeline`)
+   - ✅ Accurate GPU timestamps (start, end)
    - ✅ Kernel execution duration measurements
    - ✅ Timeline analysis capabilities
-   - ❌ Asynchronous buffered output
-   - ❌ More complex implementation
-   - ❌ Requires buffer management
+   - ⚠️ Asynchronous buffered output (traces appear after completion)
 
-### Current Limitations
+### Usage
 
-The current implementation uses **callback tracing**, which provides rich dispatch information but **does not include kernel execution timestamps**. The `start_timestamp` and `end_timestamp` fields in `rocprofiler_callback_tracing_kernel_dispatch_data_t` are always `0` in callback tracing mode.
+Enable timeline mode by setting the `--timeline` option:
 
-**What you CAN get:**
-- Kernel name and dispatch information
-- Grid and workgroup dimensions
-- Memory segment sizes
-- Dispatch order and correlation IDs
-
-**What you CANNOT get:**
-- Actual kernel execution start/end times
-- Kernel execution duration
-- GPU timeline information
-
-### Adding Timeline Support
-
-To add accurate timeline support with kernel execution timestamps, the tracer would need to be redesigned to use **buffer tracing** mode:
-
-```cpp
-// Example: Configure buffer tracing instead of callback tracing
-rocprofiler_configure_buffer_tracing_service(
-    client_ctx,
-    ROCPROFILER_BUFFER_TRACING_KERNEL_DISPATCH,
-    // ... buffer configuration
-);
+```bash
+RPV3_OPTIONS="--timeline" LD_PRELOAD=./libkernel_tracer.so ./example_app
 ```
 
-This would enable access to accurate GPU timestamps but would change the output model from real-time to buffered/asynchronous.
+### Timeline Output
+
+Timeline mode provides the following additional metrics:
+
+- **Start Timestamp**: GPU kernel start time in nanoseconds
+- **End Timestamp**: GPU kernel end time in nanoseconds
+- **Duration**: Kernel execution time in microseconds (μs)
+- **Time Since Start**: Elapsed time since first kernel in milliseconds (ms)
+
+### Implementation Details
+
+When timeline mode is enabled:
+- The profiler uses `rocprofiler_configure_buffer_tracing_service()` instead of callback tracing
+- Creates an 8KB buffer with 87.5% watermark for efficient batching
+- Kernel names are still obtained via code object callbacks
+- Buffer is flushed during finalization to ensure all records are processed
+
+Both C++ and C implementations provide identical timeline functionality. The only difference is kernel name formatting (demangled in C++, mangled in C).
 
 ## License
 

@@ -13,6 +13,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* Global flag for timeline mode */
+int rpv3_timeline_enabled = 0;
+
 /* Parse options from the RPV3_OPTIONS environment variable */
 int rpv3_parse_options(void) {
     const char* options_env = getenv("RPV3_OPTIONS");
@@ -46,15 +49,15 @@ int rpv3_parse_options(void) {
             printf("Options:\n");
             printf("  --version    Print version information and exit\n");
             printf("  --help, -h   Print this help message and exit\n");
-            printf("  --timeline   Enable timeline information (NOT YET IMPLEMENTED)\n");
+            printf("  --timeline   Enable timeline mode with GPU timestamps\n");
             printf("\nExample:\n");
             printf("  RPV3_OPTIONS=\"--version\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
+            printf("  RPV3_OPTIONS=\"--timeline\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
             should_exit = 1;
         }
         else if (strcmp(token, "--timeline") == 0) {
-            fprintf(stderr, "[RPV3] Error: --timeline option is not yet implemented\n");
-            fprintf(stderr, "[RPV3] This feature will enable timeline information in a future release\n");
-            should_exit = 1;
+            rpv3_timeline_enabled = 1;
+            printf("[RPV3] Timeline mode enabled\n");
         }
         else {
             fprintf(stderr, "[RPV3] Warning: Unknown option '%s' (ignored)\n", token);

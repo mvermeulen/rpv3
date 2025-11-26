@@ -5,7 +5,35 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-11-26
+
+### Added
+- **Timeline Support**: Full GPU timestamp functionality via buffer tracing
+  - `--timeline` option now functional (previously placeholder)
+  - GPU timestamps: kernel start and end times in nanoseconds
+  - Duration calculations: kernel execution time in microseconds
+  - Time since start tracking: elapsed time from first kernel in milliseconds
+  - Dual-mode implementation: callback tracing (default) and buffer tracing (timeline)
+- Buffer tracing implementation in both C++ and C versions
+  - `timeline_buffer_callback()` for processing batched kernel dispatch records
+  - `setup_buffer_tracing()` and `setup_callback_tracing()` helper functions
+  - 8KB buffer with 87.5% watermark for efficient batching
+  - Kernel name preservation for buffer callback processing
+- Timeline integration tests
+  - 5 new tests in `test_integration.sh` validating timeline functionality
+  - Timestamp validation and duration verification tests
+- Comprehensive timeline documentation
+  - Updated README with timeline usage examples and output samples
+  - Implementation details and buffer tracing architecture
+  - Timeline mode section with feature comparison
+
+### Changed
+- Updated help message to show `--timeline` as functional
+- README "Timeline Support and Limitations" section replaced with "Timeline Support" implementation guide
+- Version bumped from 1.0.3 to 1.1.0 (minor version for new feature)
+
 ## [1.0.3] - 2025-11-25
+
 
 ### Added
 - Comprehensive testing infrastructure
