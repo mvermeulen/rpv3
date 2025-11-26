@@ -44,6 +44,33 @@ static int timeline_enabled = 0;
 static uint64_t tracer_start_timestamp = 0;  /* Baseline timestamp when tracer starts */
 static rocprofiler_buffer_id_t trace_buffer = {0};
 
+/* Counter collection state */
+static rpv3_counter_mode_t counter_mode = RPV3_COUNTER_MODE_NONE;
+static rocprofiler_buffer_id_t counter_buffer = {0};
+
+/* Agent profile storage */
+#define MAX_AGENTS 16
+typedef struct {
+    rocprofiler_agent_id_t agent_id;
+    rocprofiler_profile_config_id_t profile_id;
+    int valid;
+} agent_profile_t;
+
+static agent_profile_t agent_profiles[MAX_AGENTS];
+static atomic_int agent_profiles_count = ATOMIC_VAR_INIT(0);
+
+/* Temporary storage for counter discovery */
+#define MAX_COUNTERS 1024
+typedef struct {
+    char name[256];
+    rocprofiler_counter_id_t id;
+} counter_entry_t;
+
+typedef struct {
+    counter_entry_t counters[MAX_COUNTERS];
+    size_t count;
+} counter_list_t;
+
 /* Helper function to store kernel name */
 void store_kernel_name(rocprofiler_kernel_id_t kernel_id, const char* name) {
     if (!name) return;
@@ -325,6 +352,291 @@ int setup_callback_tracing() {
     return 0;
 }
 
+/* Helper to store agent profile */
+void store_agent_profile(rocprofiler_agent_id_t agent_id, rocprofiler_profile_config_id_t profile_id) {
+    int idx = atomic_fetch_add(&agent_profiles_count, 1);
+    if (idx < MAX_AGENTS) {
+        agent_profiles[idx].agent_id = agent_id;
+        agent_profiles[idx].profile_id = profile_id;
+        agent_profiles[idx].valid = 1;
+    } else {
+        fprintf(stderr, "[Kernel Tracer] Warning: Max agents reached, cannot store profile\n");
+    }
+}
+
+/* Helper to find agent profile */
+int find_agent_profile(rocprofiler_agent_id_t agent_id, rocprofiler_profile_config_id_t* profile_id) {
+    int count = atomic_load(&agent_profiles_count);
+    for (int i = 0; i < count && i < MAX_AGENTS; i++) {
+        if (agent_profiles[i].valid && agent_profiles[i].agent_id.handle == agent_id.handle) {
+            *profile_id = agent_profiles[i].profile_id;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* Get target counters for the selected mode */
+/* Returns number of counters, fills names array */
+int get_target_counters(rpv3_counter_mode_t mode, const char** names, int max_names) {
+    int count = 0;
+    
+    if (mode == RPV3_COUNTER_MODE_COMPUTE || mode == RPV3_COUNTER_MODE_MIXED) {
+        if (count < max_names) names[count++] = "SQ_INSTS_VALU";
+        if (count < max_names) names[count++] = "SQ_WAVES";
+        if (count < max_names) names[count++] = "SQ_INSTS_SALU";
+    }
+    
+    if (mode == RPV3_COUNTER_MODE_MEMORY || mode == RPV3_COUNTER_MODE_MIXED) {
+        if (count < max_names) names[count++] = "TCC_EA_RDREQ_sum";
+        if (count < max_names) names[count++] = "TCC_EA_WRREQ_sum";
+        if (count < max_names) names[count++] = "TCC_EA_RDREQ_32B_sum";
+        if (count < max_names) names[count++] = "TCC_EA_RDREQ_64B_sum";
+        if (count < max_names) names[count++] = "TCP_TCC_WRITE_REQ_sum";
+    }
+    
+    return count;
+}
+
+/* Callback for dispatch counting service */
+void dispatch_counting_callback(
+    rocprofiler_dispatch_counting_service_data_t dispatch_data,
+    rocprofiler_profile_config_id_t* config,
+    rocprofiler_user_data_t* user_data,
+    void* callback_data_args
+) {
+    (void) user_data;
+    (void) callback_data_args;
+    
+    /* Find the profile for this agent */
+    rocprofiler_profile_config_id_t profile_id;
+    if (find_agent_profile(dispatch_data.dispatch_info.agent_id, &profile_id)) {
+        *config = profile_id;
+    }
+}
+
+/* Callback for processing collected counter records */
+void counter_record_callback(
+    rocprofiler_context_id_t context,
+    rocprofiler_buffer_id_t buffer_id,
+    rocprofiler_record_header_t** headers,
+    size_t num_headers,
+    void* user_data,
+    uint64_t drop_count
+) {
+    (void) context;
+    (void) buffer_id;
+    (void) user_data;
+    
+    if (drop_count > 0) {
+        fprintf(stderr, "[Kernel Tracer] Warning: Dropped %lu counter records\n", (unsigned long)drop_count);
+    }
+    
+    for (size_t i = 0; i < num_headers; i++) {
+        rocprofiler_record_header_t* header = headers[i];
+        
+        if (header->category == ROCPROFILER_BUFFER_CATEGORY_COUNTERS &&
+            header->kind == ROCPROFILER_COUNTER_RECORD_VALUE) {
+            
+            rocprofiler_counter_record_t* record = (rocprofiler_counter_record_t*)header->payload;
+            
+            printf("[Counters] Dispatch ID: %lu, Value: %f\n",
+                   (unsigned long)record->dispatch_id, record->counter_value);
+        }
+    }
+}
+
+/* Callback to find supported counters */
+rocprofiler_status_t counter_info_callback(
+    rocprofiler_agent_id_t agent,
+    rocprofiler_counter_id_t* counters,
+    size_t num_counters,
+    void* user_data
+) {
+    (void) agent;
+    counter_list_t* list = (counter_list_t*)user_data;
+    
+    for (size_t i = 0; i < num_counters; i++) {
+        rocprofiler_counter_info_v0_t info;
+        rocprofiler_status_t status = rocprofiler_query_counter_info(
+            counters[i],
+            ROCPROFILER_COUNTER_INFO_VERSION_0,
+            &info
+        );
+        
+        if (status == ROCPROFILER_STATUS_SUCCESS && info.name) {
+            if (list->count < MAX_COUNTERS) {
+                strncpy(list->counters[list->count].name, info.name, 255);
+                list->counters[list->count].name[255] = '\0';
+                list->counters[list->count].id = counters[i];
+                list->count++;
+            }
+        }
+    }
+    return ROCPROFILER_STATUS_SUCCESS;
+}
+
+/* Callback for agent query */
+rocprofiler_status_t agent_query_callback(
+    rocprofiler_agent_version_t version,
+    const void** agents,
+    size_t num_agents,
+    void* user_data
+) {
+    (void) version;
+    /* We passed a struct pointer, but need to cast appropriately */
+    /* Let's define the struct here to match */
+    struct agent_data_t {
+        rocprofiler_agent_id_t agents[MAX_AGENTS];
+        size_t count;
+    };
+    struct agent_data_t* data = (struct agent_data_t*)user_data;
+    
+    for (size_t i = 0; i < num_agents; i++) {
+        const rocprofiler_agent_v0_t* info = (const rocprofiler_agent_v0_t*)agents[i];
+        if (info->type == ROCPROFILER_AGENT_TYPE_GPU) {
+            if (data->count < MAX_AGENTS) {
+                data->agents[data->count] = info->id;
+                data->count++;
+            }
+        }
+    }
+    return ROCPROFILER_STATUS_SUCCESS;
+}
+
+/* Create profile for agent */
+void create_profile_for_agent(rocprofiler_agent_id_t agent_id) {
+    /* 1. Get all supported counters */
+    counter_list_t supported_counters;
+    supported_counters.count = 0;
+    
+    rocprofiler_iterate_agent_supported_counters(
+        agent_id,
+        counter_info_callback,
+        &supported_counters
+    );
+    
+    /* 2. Select matching counters */
+    const char* target_names[32];
+    int num_targets = get_target_counters(counter_mode, target_names, 32);
+    
+    rocprofiler_counter_id_t selected_counters[32];
+    size_t selected_count = 0;
+    
+    printf("[Kernel Tracer] Creating profile for agent. Targets: %d, Supported: %zu\n", 
+           num_targets, supported_counters.count);
+           
+    for (int i = 0; i < num_targets; i++) {
+        int found = 0;
+        for (size_t j = 0; j < supported_counters.count; j++) {
+            if (strcmp(target_names[i], supported_counters.counters[j].name) == 0) {
+                selected_counters[selected_count++] = supported_counters.counters[j].id;
+                printf("  + Added counter: %s\n", target_names[i]);
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            printf("  - Counter not found: %s\n", target_names[i]);
+        }
+    }
+    
+    if (selected_count == 0) {
+        printf("[Kernel Tracer] Warning: No matching counters found for this agent\n");
+        return;
+    }
+    
+    /* 3. Create profile */
+    rocprofiler_profile_config_id_t profile_id = {0};
+    rocprofiler_status_t status = rocprofiler_create_profile_config(
+        agent_id,
+        selected_counters,
+        selected_count,
+        &profile_id
+    );
+    
+    if (status == ROCPROFILER_STATUS_SUCCESS) {
+        store_agent_profile(agent_id, profile_id);
+        printf("[Kernel Tracer] Profile created successfully with %zu counters\n", selected_count);
+    } else {
+        fprintf(stderr, "[Kernel Tracer] Failed to create profile config: %d\n", status);
+    }
+}
+
+/* Setup counter collection */
+int setup_counter_collection() {
+    printf("[Kernel Tracer] Setting up counter collection...\n");
+    
+    /* 1. Query agents */
+    struct agent_data_t {
+        rocprofiler_agent_id_t agents[MAX_AGENTS];
+        size_t count;
+    } agent_data;
+    agent_data.count = 0;
+    
+    rocprofiler_query_available_agents(
+        ROCPROFILER_AGENT_INFO_VERSION_0,
+        agent_query_callback,
+        sizeof(rocprofiler_agent_v0_t),
+        &agent_data
+    );
+    
+    if (agent_data.count == 0) {
+        printf("[Kernel Tracer] No GPU agents found for counter collection\n");
+        return 0;
+    }
+    
+    /* 2. Check support and create profiles */
+    int any_agent_supported = 0;
+    for (size_t i = 0; i < agent_data.count; i++) {
+        create_profile_for_agent(agent_data.agents[i]);
+        /* Check if profile was created */
+        rocprofiler_profile_config_id_t dummy;
+        if (find_agent_profile(agent_data.agents[i], &dummy)) {
+            any_agent_supported = 1;
+        }
+    }
+    
+    if (!any_agent_supported) {
+        printf("[Kernel Tracer] Warning: No agents support counter collection or no counters found. Counter collection disabled.\n");
+        return 0;
+    }
+    
+    /* 3. Create buffer */
+    const size_t buffer_size = 64 * 1024;
+    const size_t buffer_watermark = 56 * 1024;
+    
+    rocprofiler_status_t status = rocprofiler_create_buffer(
+        client_ctx,
+        buffer_size,
+        buffer_watermark,
+        ROCPROFILER_BUFFER_POLICY_LOSSLESS,
+        counter_record_callback,
+        NULL,
+        &counter_buffer
+    );
+    
+    if (status != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to create counter buffer\n");
+        return -1;
+    }
+    
+    /* 4. Configure service */
+    status = rocprofiler_configure_buffer_dispatch_counting_service(
+        client_ctx,
+        counter_buffer,
+        dispatch_counting_callback,
+        NULL
+    );
+    
+    if (status != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to configure dispatch counting service\n");
+        return -1;
+    }
+    
+    return 0;
+}
+
 /* Tool initialization callback */
 
 int tool_init(rocprofiler_client_finalize_t fini_func,
@@ -337,10 +649,17 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     /* Check if timeline mode is enabled (from rpv3_options) */
     timeline_enabled = (rpv3_timeline_enabled != 0);
     
+    /* Check if counter mode is enabled */
+    counter_mode = rpv3_counter_mode;
+    
     if (timeline_enabled) {
         printf("[Kernel Tracer] Timeline mode enabled\n");
         /* Capture baseline timestamp when tracer starts */
         rocprofiler_get_timestamp(&tracer_start_timestamp);
+    }
+    
+    if (counter_mode != RPV3_COUNTER_MODE_NONE) {
+        printf("[Kernel Tracer] Counter collection enabled (mode: %d)\n", counter_mode);
     }
     
     /* Initialize kernel table */
@@ -356,6 +675,8 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     int result;
     if (timeline_enabled) {
         result = setup_buffer_tracing();
+    } else if (counter_mode != RPV3_COUNTER_MODE_NONE) {
+        result = setup_counter_collection();
     } else {
         result = setup_callback_tracing();
     }
@@ -407,6 +728,10 @@ void tool_fini(void* tool_data) {
     /* Destroy buffer if created */
     if (timeline_enabled && trace_buffer.handle != 0) {
         rocprofiler_destroy_buffer(trace_buffer);
+    }
+    
+    if (counter_buffer.handle != 0) {
+        rocprofiler_destroy_buffer(counter_buffer);
     }
 }
 

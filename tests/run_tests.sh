@@ -76,6 +76,19 @@ fi
 
 echo ""
 
+# Run counter tests
+print_header "Running Counter Tests"
+TOTAL_SUITES=$((TOTAL_SUITES + 1))
+if bash "$SCRIPT_DIR/test_counters.sh"; then
+    PASSED_SUITES=$((PASSED_SUITES + 1))
+    print_pass "Counter tests passed"
+else
+    FAILED_SUITES=$((FAILED_SUITES + 1))
+    print_fail "Counter tests failed"
+fi
+
+echo ""
+
 # Print overall summary
 print_header "Overall Test Summary"
 echo "Test suites run:    $TOTAL_SUITES"

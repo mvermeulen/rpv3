@@ -5,6 +5,15 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-11-26
+### Added
+- Counter collection support (`--counter` option) with `compute`, `memory`, and `mixed` groups.
+- Dispatch counting service integration for both C and C++ implementations.
+- Graceful handling of unsupported hardware for counter collection.
+- Diagnostic tools (`check_status`, `diagnose_counters`) in `utils/` directory.
+- Integration tests for counter collection (`tests/test_counters.sh`).
+- Updated `Makefile` with `utils` target and improved cleanup.
+
 ## [1.1.3] - 2025-11-26
 
 ### Added

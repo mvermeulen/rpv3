@@ -11,10 +11,10 @@ extern "C" {
 #endif
 
 /* Version information */
-#define RPV3_VERSION "1.1.3"
+#define RPV3_VERSION "1.2.0"
 #define RPV3_VERSION_MAJOR 1
-#define RPV3_VERSION_MINOR 1
-#define RPV3_VERSION_PATCH 3
+#define RPV3_VERSION_MINOR 2
+#define RPV3_VERSION_PATCH 0
 
 
 /* Return codes */
@@ -24,6 +24,17 @@ extern "C" {
 /* Global flag for timeline mode (set by --timeline option) */
 extern int rpv3_timeline_enabled;
 
+/* Counter collection modes */
+typedef enum {
+    RPV3_COUNTER_MODE_NONE = 0,
+    RPV3_COUNTER_MODE_COMPUTE,
+    RPV3_COUNTER_MODE_MEMORY,
+    RPV3_COUNTER_MODE_MIXED
+} rpv3_counter_mode_t;
+
+/* Global counter mode (set by --counter option) */
+extern rpv3_counter_mode_t rpv3_counter_mode;
+
 /**
  * Parse options from the RPV3_OPTIONS environment variable
  * 
@@ -32,6 +43,7 @@ extern int rpv3_timeline_enabled;
  *   --version : Print version information and return RPV3_OPTIONS_EXIT
  *   --help, -h : Print help message and return RPV3_OPTIONS_EXIT
  *   --timeline : Enable timeline mode with GPU timestamps (sets rpv3_timeline_enabled)
+ *   --counter <group> : Enable counter collection (compute, memory, mixed)
  * 
  * @return RPV3_OPTIONS_CONTINUE (0) to continue normal operation
  *         RPV3_OPTIONS_EXIT (1) to exit early without initializing profiler

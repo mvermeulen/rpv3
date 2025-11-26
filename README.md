@@ -188,6 +188,7 @@ The profiler supports configuration via the `RPV3_OPTIONS` environment variable.
 - `--version` - Print version information and exit without initializing the profiler
 - `--help` or `-h` - Print help message and exit without initializing the profiler
 - `--timeline` - Enable timeline mode with GPU timestamps (uses buffer tracing)
+- `--counter <group>` - Enable counter collection. Groups: `compute`, `memory`, `mixed`
 
 ### Examples
 
@@ -200,6 +201,12 @@ RPV3_OPTIONS="--help" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
 # Enable timeline mode with GPU timestamps
 RPV3_OPTIONS="--timeline" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# Enable counter collection (compute metrics)
+RPV3_OPTIONS="--counter compute" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# Enable counter collection (memory metrics)
+RPV3_OPTIONS="--counter memory" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
 # Multiple options can be combined (space-separated)
 RPV3_OPTIONS="--version --help" LD_PRELOAD=./libkernel_tracer.so ./example_app
@@ -222,7 +229,7 @@ When running the example application with the profiler, you should see detailed 
 ### C++ Version (Demangled Kernel Names)
 
 ```
-[Kernel Tracer] Configuring profiler v1.0.0 [1.0.0] (priority: 0)
+[Kernel Tracer] Configuring profiler v1.2.0 [1.2.0] (priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -287,7 +294,7 @@ When timeline mode is enabled, the output includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring profiler v1.0.0 [1.0.0] (priority: 0)
+[Kernel Tracer] Configuring profiler v1.2.0 [1.2.0] (priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Timeline mode enabled
 [Kernel Tracer] Setting up buffer tracing for timeline mode...
@@ -448,6 +455,40 @@ When timeline mode is enabled:
 - Buffer is flushed during finalization to ensure all records are processed
 
 Both C++ and C implementations provide identical timeline functionality. The only difference is kernel name formatting (demangled in C++, mangled in C).
+
+## Counter Collection
+
+### Overview
+
+The profiler supports collecting per-kernel performance counters to help diagnose performance bottlenecks (e.g., compute-bound vs. memory-bound).
+
+### Usage
+
+Enable counter collection by setting the `--counter` option with a counter group:
+
+```bash
+RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
+```
+
+### Counter Groups
+
+| Group | Description | Counters Collected |
+|-------|-------------|-------------------|
+| `compute` | Compute-related metrics | `SQ_INSTS_VALU`, `SQ_WAVES`, `SQ_INSTS_SALU` |
+| `memory` | Memory subsystem metrics | `TCC_EA_RDREQ_sum`, `TCC_EA_WRREQ_sum`, `TCC_EA_RDREQ_32B_sum`, `TCC_EA_RDREQ_64B_sum`, `TCP_TCC_WRITE_REQ_sum` |
+| `mixed` | Both compute and memory | All of the above |
+
+### Output
+
+When counter collection is enabled, the profiler prints the collected values for each kernel dispatch:
+
+```
+[Counters] Dispatch ID: 1, Value: 1048576.000000
+[Counters] Dispatch ID: 1, Value: 256.000000
+...
+```
+
+**Note**: Counter collection requires hardware support. If the GPU does not support the requested counters, the feature will be gracefully disabled with a warning.
 
 ## License
 

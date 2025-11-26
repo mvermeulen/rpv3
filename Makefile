@@ -19,10 +19,29 @@ PLUGIN_CPP = libkernel_tracer.so
 PLUGIN_C = libkernel_tracer_c.so
 EXAMPLE = example_app
 OPTIONS_OBJ = rpv3_options.o
+UTILS_DIR = utils
+UTILS_BIN = $(UTILS_DIR)/check_status $(UTILS_DIR)/diagnose_counters
 
-.PHONY: all clean
+.PHONY: all clean utils
 
 all: $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE)
+
+# Build utilities
+utils: $(UTILS_BIN)
+
+$(UTILS_DIR)/check_status: $(UTILS_DIR)/check_status.cpp
+	$(HIPCC) --std=c++17 -O2 \
+		-I$(ROCPROF_INCLUDE) \
+		-L$(ROCPROF_LIB) \
+		-lrocprofiler-sdk \
+		-o $@ $<
+
+$(UTILS_DIR)/diagnose_counters: $(UTILS_DIR)/diagnose_counters.cpp
+	$(HIPCC) --std=c++17 -O2 \
+		-I$(ROCPROF_INCLUDE) \
+		-L$(ROCPROF_LIB) \
+		-lrocprofiler-sdk \
+		-o $@ $<
 
 # Build the options parser object file
 $(OPTIONS_OBJ): rpv3_options.c rpv3_options.h
@@ -52,7 +71,7 @@ $(EXAMPLE): example_app.cpp
 		-o $@ $<
 
 clean:
-	rm -f $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE) $(OPTIONS_OBJ)
+	rm -f $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE) $(OPTIONS_OBJ) $(UTILS_BIN)
 
 # Usage instructions
 help:
@@ -61,6 +80,7 @@ help:
 	@echo "Targets:"
 	@echo "  make all     - Build both plugin and example (default)"
 	@echo "  make clean   - Remove built files"
+	@echo "  make utils   - Build utility tools"
 	@echo "  make test    - Run all tests"
 	@echo ""
 	@echo "Usage:"
