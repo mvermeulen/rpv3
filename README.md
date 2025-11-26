@@ -33,6 +33,7 @@ rpv3/
 ├── utils/                     # Utility tools
 │   ├── diagnose_counters.cpp  # Tool to list supported counters
 │   ├── check_status.cpp       # Tool to decode status codes
+│   ├── check_requirements.sh  # Tool to check system requirements
 │   └── README.md              # Utilities documentation
 ├── Makefile                   # Make-based build system
 ├── CMakeLists.txt             # CMake-based build system
