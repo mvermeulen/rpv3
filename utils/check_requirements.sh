@@ -183,9 +183,38 @@ if command -v rocprofv3 &> /dev/null; then
     ROCPROF_OUTPUT=$(rocprofv3 -L 2>&1)
     EXIT_CODE=$?
     
+    # Function to check counter definitions for GFX support
+    check_counter_defs() {
+        COUNTER_DEFS="/opt/rocm/share/rocprofiler-sdk/counter_defs.yaml"
+        
+        # Extract GFX version from rocminfo if not already set
+        if [ -z "$GFX_VERSION" ]; then
+            if command -v rocminfo &> /dev/null; then
+                GFX_VERSION=$(rocminfo | grep -m 1 "gfx" | awk '{print $2}')
+            fi
+        fi
+
+        if [ -n "$GFX_VERSION" ]; then
+            if [ -f "$COUNTER_DEFS" ]; then
+                print_info "Checking $COUNTER_DEFS for $GFX_VERSION support..."
+                if grep -q "$GFX_VERSION" "$COUNTER_DEFS"; then
+                    print_pass "$GFX_VERSION found in counter definitions."
+                    print_info "Counters might be available but require specific configuration or environment."
+                else
+                    print_warn "$GFX_VERSION NOT found in counter definitions."
+                fi
+            else
+                print_warn "Counter definitions file not found at $COUNTER_DEFS"
+            fi
+        else
+            print_warn "Could not determine GFX version for fallback check."
+        fi
+    }
+
     if [ $EXIT_CODE -ne 0 ]; then
         print_fail "rocprofv3 -L failed with exit code $EXIT_CODE"
         echo "$ROCPROF_OUTPUT" | head -n 5 | sed 's/^/    /'
+        check_counter_defs
     else
         # Check if we have any counters listed. 
         # If output is short (just GPU name), it likely failed to find counters.
@@ -194,20 +223,7 @@ if command -v rocprofv3 &> /dev/null; then
         if [ "$LINE_COUNT" -le 5 ]; then
              print_fail "rocprofv3 listed no counters (Output too short)"
              echo "$ROCPROF_OUTPUT" | sed 's/^/    /'
-
-             # Fallback check for gfx1151
-             COUNTER_DEFS="/opt/rocm/share/rocprofiler-sdk/counter_defs.yaml"
-             if [ -f "$COUNTER_DEFS" ]; then
-                 print_info "Checking $COUNTER_DEFS for gfx1151 support..."
-                 if grep -q "gfx1151" "$COUNTER_DEFS"; then
-                     print_pass "gfx1151 found in counter definitions."
-                     print_info "Counters might be available but require specific configuration or environment."
-                 else
-                     print_warn "gfx1151 NOT found in counter definitions."
-                 fi
-             else
-                 print_warn "Counter definitions file not found at $COUNTER_DEFS"
-             fi
+             check_counter_defs
         else
              print_pass "rocprofv3 listed counters (Output length: $LINE_COUNT lines)"
         fi
