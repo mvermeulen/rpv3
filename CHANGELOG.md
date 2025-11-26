@@ -5,7 +5,17 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2025-11-26
+
+### Changed
+- Timeline baseline timestamp now captures tracer initialization time instead of first kernel dispatch
+  - "Time Since Start" now shows elapsed time from when profiler starts, not from first kernel
+  - Provides more accurate profiling duration including initialization overhead
+  - Uses `rocprofiler_get_timestamp()` to capture baseline when timeline mode is enabled
+  - First kernel now shows ~200ms+ instead of 0.000ms, revealing initialization time
+
 ## [1.1.0] - 2025-11-26
+
 
 ### Added
 - **Timeline Support**: Full GPU timestamp functionality via buffer tracing

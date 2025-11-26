@@ -41,7 +41,7 @@ static atomic_int kernel_table_size = ATOMIC_VAR_INIT(0);
 
 /* Timeline mode state */
 static int timeline_enabled = 0;
-static uint64_t first_kernel_timestamp = 0;
+static uint64_t tracer_start_timestamp = 0;  /* Baseline timestamp when tracer starts */
 static rocprofiler_buffer_id_t trace_buffer = {0};
 
 /* Helper function to store kernel name */
@@ -137,11 +137,8 @@ void timeline_buffer_callback(
             uint64_t end_ns = record->end_timestamp;
             uint64_t duration_ns = end_ns - start_ns;
             
-            /* Calculate time since first kernel */
-            if (first_kernel_timestamp == 0) {
-                first_kernel_timestamp = start_ns;
-            }
-            double time_since_start_ms = (start_ns - first_kernel_timestamp) / 1000000.0;
+            /* Calculate time since tracer started */
+            double time_since_start_ms = (start_ns - tracer_start_timestamp) / 1000000.0;
             
             /* Look up kernel name */
             const char* kernel_name = lookup_kernel_name(record->dispatch_info.kernel_id);
@@ -342,6 +339,8 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     
     if (timeline_enabled) {
         printf("[Kernel Tracer] Timeline mode enabled\n");
+        /* Capture baseline timestamp when tracer starts */
+        rocprofiler_get_timestamp(&tracer_start_timestamp);
     }
     
     /* Initialize kernel table */

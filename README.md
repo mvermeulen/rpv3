@@ -208,7 +208,7 @@ When `--timeline` is enabled, the profiler switches from callback tracing to buf
 
 - **GPU Timestamps**: Accurate kernel start and end times in nanoseconds
 - **Duration**: Kernel execution time in microseconds
-- **Time Since Start**: Elapsed time since the first kernel dispatch in milliseconds
+- **Time Since Start**: Elapsed time since profiler initialization in milliseconds (includes setup overhead)
 
 **Note**: Timeline mode uses buffered output, so kernel traces appear after kernels complete rather than in real-time.
 
@@ -318,19 +318,19 @@ Results verification:
   Start Timestamp: 961951699264 ns
   End Timestamp: 961951727998 ns
   Duration: 28.734 μs
-  Time Since Start: 0.000 ms
+  Time Since Start: 215.234 ms
 
 [Kernel Trace #2]
   Kernel Name: vectorMul(float const*, float const*, float*, int)
   ...
   Duration: 27.412 μs
-  Time Since Start: 1.010 ms
+  Time Since Start: 216.244 ms
 
 [Kernel Trace #3]
   Kernel Name: matrixTranspose(float const*, float*, int, int)
   ...
   Duration: 41.759 μs
-  Time Since Start: 1.441 ms
+  Time Since Start: 216.675 ms
 
 [Kernel Tracer] Total kernels traced: 3
 [Kernel Tracer] Unique kernel symbols tracked: 18

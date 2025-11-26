@@ -31,7 +31,7 @@ namespace {
     
     // Timeline mode state
     bool timeline_enabled = false;
-    uint64_t first_kernel_timestamp = 0;
+    uint64_t tracer_start_timestamp = 0;  // Baseline timestamp when tracer starts
     rocprofiler_buffer_id_t trace_buffer = {};
 }
 
@@ -114,11 +114,8 @@ void timeline_buffer_callback(
             uint64_t end_ns = record->end_timestamp;
             uint64_t duration_ns = end_ns - start_ns;
             
-            // Calculate time since first kernel
-            if (first_kernel_timestamp == 0) {
-                first_kernel_timestamp = start_ns;
-            }
-            double time_since_start_ms = (start_ns - first_kernel_timestamp) / 1000000.0;
+            // Calculate time since tracer started
+            double time_since_start_ms = (start_ns - tracer_start_timestamp) / 1000000.0;
             
             // Look up kernel name
             std::string kernel_name = "<unknown>";
@@ -321,6 +318,8 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     
     if (timeline_enabled) {
         printf("[Kernel Tracer] Timeline mode enabled\n");
+        // Capture baseline timestamp when tracer starts
+        rocprofiler_get_timestamp(&tracer_start_timestamp);
     }
     
     // Create a context for profiling
