@@ -5,6 +5,10 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.2] - 2025-11-26
+### Changed
+- Improved `utils/check_requirements.sh` with fallback check for `gfx1151` in `counter_defs.yaml` when `rocprofv3 -L` fails to list counters.
+
 ## [1.2.1] - 2025-11-26
 ### Added
 - Diagnostic tool `utils/check_requirements.sh` to verify system requirements for performance counters.

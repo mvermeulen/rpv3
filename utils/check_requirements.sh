@@ -194,6 +194,20 @@ if command -v rocprofv3 &> /dev/null; then
         if [ "$LINE_COUNT" -le 5 ]; then
              print_fail "rocprofv3 listed no counters (Output too short)"
              echo "$ROCPROF_OUTPUT" | sed 's/^/    /'
+
+             # Fallback check for gfx1151
+             COUNTER_DEFS="/opt/rocm/share/rocprofiler-sdk/counter_defs.yaml"
+             if [ -f "$COUNTER_DEFS" ]; then
+                 print_info "Checking $COUNTER_DEFS for gfx1151 support..."
+                 if grep -q "gfx1151" "$COUNTER_DEFS"; then
+                     print_pass "gfx1151 found in counter definitions."
+                     print_info "Counters might be available but require specific configuration or environment."
+                 else
+                     print_warn "gfx1151 NOT found in counter definitions."
+                 fi
+             else
+                 print_warn "Counter definitions file not found at $COUNTER_DEFS"
+             fi
         else
              print_pass "rocprofv3 listed counters (Output length: $LINE_COUNT lines)"
         fi
