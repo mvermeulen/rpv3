@@ -171,4 +171,34 @@ else
     print_info "Cannot read dmesg (permission denied). Skipping log check."
 fi
 
+
+# 10. Check rocprofv3 availability and counters
+print_header "rocprofv3 Counter Check"
+if command -v rocprofv3 &> /dev/null; then
+    print_info "rocprofv3 found at $(which rocprofv3)"
+    
+    # Run rocprofv3 -L to list available counters
+    print_info "Running 'rocprofv3 -L' to list counters..."
+    ROCPROF_OUTPUT=$(rocprofv3 -L 2>&1)
+    EXIT_CODE=$?
+    
+    if [ $EXIT_CODE -ne 0 ]; then
+        print_fail "rocprofv3 -L failed with exit code $EXIT_CODE"
+        echo "$ROCPROF_OUTPUT" | head -n 5 | sed 's/^/    /'
+    else
+        # Check if we have any counters listed. 
+        # If output is short (just GPU name), it likely failed to find counters.
+        LINE_COUNT=$(echo "$ROCPROF_OUTPUT" | wc -l)
+        
+        if [ "$LINE_COUNT" -le 5 ]; then
+             print_fail "rocprofv3 listed no counters (Output too short)"
+             echo "$ROCPROF_OUTPUT" | sed 's/^/    /'
+        else
+             print_pass "rocprofv3 listed counters (Output length: $LINE_COUNT lines)"
+        fi
+    fi
+else
+    print_warn "rocprofv3 not found in PATH"
+fi
+
 echo ""
