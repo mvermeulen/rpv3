@@ -11,6 +11,28 @@ This project consists of:
 
 Both profiler libraries provide identical functionality - use whichever fits your project's language requirements.
 
+## Project Structure
+
+```
+rpv3/
+├── kernel_tracer.cpp          # C++ profiler plugin implementation
+├── kernel_tracer.c            # C profiler plugin implementation
+├── rpv3_options.c             # Options parsing implementation (shared)
+├── rpv3_options.h             # Options parsing header
+├── example_app.cpp            # Sample HIP application for testing
+├── Makefile                   # Make-based build system
+├── CMakeLists.txt             # CMake-based build system
+└── README.md                  # This file
+```
+
+### Code Sharing Between C and C++ Libraries
+
+The options parsing functionality (`rpv3_options.c`) is compiled once as an object file and linked into both the C++ and C profiler libraries. This approach:
+- Avoids code duplication
+- Ensures consistent behavior across both implementations
+- Follows standard C/C++ project structure practices
+- Reduces binary size by sharing compiled code
+
 ## Prerequisites
 
 - ROCm installed (tested with ROCm 5.x+)
@@ -233,6 +255,8 @@ The profiler will automatically intercept and trace all kernel dispatches in you
 
 ## Implementation Details
 
+### Profiler Architecture
+
 - Uses the **rocprofiler SDK callback tracing API** with dual callbacks:
   - `ROCPROFILER_CALLBACK_TRACING_CODE_OBJECT` - Captures kernel symbol registrations
   - `ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH` - Intercepts kernel launches
@@ -246,6 +270,14 @@ The profiler will automatically intercept and trace all kernel dispatches in you
   - Kernel ID and dispatch ID for correlation
 - Thread-safe kernel counting using atomic operations
 - Minimal performance overhead
+
+### Options Parsing Module
+
+- **`rpv3_options.c`** - Shared implementation compiled once and linked into both libraries
+- **`rpv3_options.h`** - Header with function declarations and constants
+- Parses the `RPV3_OPTIONS` environment variable for configuration
+- Supports `--version`, `--help`, and future extensibility
+- Pure C implementation ensures compatibility with both C and C++ libraries
 
 ## Timeline Support and Limitations
 

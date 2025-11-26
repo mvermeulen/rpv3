@@ -5,6 +5,26 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.2] - 2025-11-25
+
+### Added
+- `--timeline` option placeholder (prints "not yet implemented" error message)
+- Separate `rpv3_options.c` implementation file for options parsing
+- Project structure section in README documenting file organization
+- Options parsing module documentation in README
+
+### Changed
+- **BREAKING**: Refactored options parsing from header-only to compiled object file
+  - `rpv3_options.h` now contains only declarations (no inline implementation)
+  - `rpv3_options.c` contains the implementation, compiled once and linked into both libraries
+  - Updated Makefile to compile `rpv3_options.o` and link into both plugins
+  - Updated CMakeLists.txt to create `rpv3_options` object library
+- Enhanced help message to include `--timeline` option
+- Updated README with code sharing architecture explanation
+
+### Fixed
+- Version string in `rpv3_options.h` (was "1.0." now "1.0.2")
+
 ## [1.0.1] - 2025-11-25
 
 ### Added
@@ -13,14 +33,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `--help` / `-h` option to display usage information
 - Shared header file `rpv3_options.h` for code sharing between C and C++ implementations
 - Build target for C version in Makefile
-
-### Changed
-- Updated Makefile to build both C and C++ versions by default
-- Updated Makefile clean target to remove both library versions
-- Enhanced README with RPV3_OPTIONS configuration documentation
-
-### Fixed
-- C compatibility issue with `strdup()` by adding `_POSIX_C_SOURCE` macro
 
 ## [1.0.0] - 2025-11-24
 

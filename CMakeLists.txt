@@ -15,11 +15,19 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(rocprofiler-sdk REQUIRED)
 find_package(hip REQUIRED)
 
+# Build the options parser as an object library (shared between C and C++ plugins)
+add_library(rpv3_options OBJECT rpv3_options.c)
+set_target_properties(rpv3_options PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    C_STANDARD 11
+)
+
 # Build the profiler plugin library (C++ version)
 add_library(kernel_tracer SHARED kernel_tracer.cpp)
 target_link_libraries(kernel_tracer 
     PRIVATE 
     rocprofiler-sdk::rocprofiler-sdk
+    rpv3_options
 )
 set_target_properties(kernel_tracer PROPERTIES
     POSITION_INDEPENDENT_CODE ON
@@ -31,6 +39,7 @@ add_library(kernel_tracer_c SHARED kernel_tracer.c)
 target_link_libraries(kernel_tracer_c 
     PRIVATE 
     rocprofiler-sdk::rocprofiler-sdk
+    rpv3_options
 )
 set_target_properties(kernel_tracer_c PROPERTIES
     POSITION_INDEPENDENT_CODE ON
