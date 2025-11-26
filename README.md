@@ -22,6 +22,7 @@ rpv3/
 ├── example_app.cpp            # Sample HIP application for testing
 ├── docs/                      # Documentation
 │   └── counter_collection_research.md  # Performance counter collection research
+│   └── [Kernel Argument Access Research](docs/research_kernel_args.md)
 ├── tests/                     # Test suite
 │   ├── test_rpv3_options.c    # Unit tests for options parser
 │   ├── test_integration.sh    # Integration tests

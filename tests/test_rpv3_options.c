@@ -107,10 +107,11 @@ TEST(help_short_option) {
 
 TEST(timeline_option) {
     setenv("RPV3_OPTIONS", "--timeline", 1);
-    redirect_output();
+    rpv3_timeline_enabled = 0;
     int result = rpv3_parse_options();
-    restore_output();
-    ASSERT_EQUALS(RPV3_OPTIONS_EXIT, result, "--timeline should return EXIT (not implemented)");
+    ASSERT_EQUALS(RPV3_OPTIONS_CONTINUE, result, "--timeline should return CONTINUE");
+    ASSERT_EQUALS(1, rpv3_timeline_enabled, "rpv3_timeline_enabled should be set to 1");
+    return 0;
 }
 
 TEST(unknown_option) {

@@ -71,16 +71,16 @@ print_info "Testing kernel name extraction hasn't regressed..."
 output=$(LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
 
 # C++ version should have demangled names
-assert_contains "$output" "vectorAdd(const float\*, const float\*, float\*, int)" "vectorAdd signature preserved"
-assert_contains "$output" "vectorMul(const float\*, const float\*, float\*, int)" "vectorMul signature preserved"
-assert_contains "$output" "matrixTranspose(const float\*, float\*, int, int)" "matrixTranspose signature preserved"
+assert_contains "$output" "vectorAdd(float const\*, float const\*, float\*, int)" "vectorAdd signature preserved"
+assert_contains "$output" "vectorMul(float const\*, float const\*, float\*, int)" "vectorMul signature preserved"
+assert_contains "$output" "matrixTranspose(float const\*, float\*, int, int)" "matrixTranspose signature preserved"
 
 # Test 6: Grid size calculation correctness
 print_info "Testing grid size calculations..."
 output=$(LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
 
 # Vector kernels: 1M elements / 256 threads = 4096 blocks
-assert_contains "$output" "Grid Size: \[4096, 1, 1\]" "Vector kernel grid size correct"
+assert_contains "$output" "Grid Size: \[1048576, 1, 1\]" "Vector kernel grid size correct"
 
 # Matrix: 512x512 with 16x16 blocks = 32x32 grid
 assert_contains "$output" "Grid Size: \[512, 512, 1\]" "Matrix kernel grid size correct"

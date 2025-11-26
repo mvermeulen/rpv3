@@ -64,7 +64,7 @@ assert_contains() {
     
     TESTS_RUN=$((TESTS_RUN + 1))
     
-    if echo "$haystack" | grep -q "$needle"; then
+    if echo "$haystack" | grep -q -e "$needle"; then
         TESTS_PASSED=$((TESTS_PASSED + 1))
         print_pass "$test_name"
         return 0
@@ -84,7 +84,7 @@ assert_not_contains() {
     
     TESTS_RUN=$((TESTS_RUN + 1))
     
-    if ! echo "$haystack" | grep -q "$needle"; then
+    if ! echo "$haystack" | grep -q -e "$needle"; then
         TESTS_PASSED=$((TESTS_PASSED + 1))
         print_pass "$test_name"
         return 0
