@@ -11,10 +11,11 @@ extern "C" {
 #endif
 
 /* Version information */
-#define RPV3_VERSION "1.3.0"
+/* Version information */
+#define RPV3_VERSION "1.3.1"
 #define RPV3_VERSION_MAJOR 1
 #define RPV3_VERSION_MINOR 3
-#define RPV3_VERSION_PATCH 0
+#define RPV3_VERSION_PATCH 1
 
 
 /* Return codes */
@@ -38,6 +39,12 @@ typedef enum {
 /* Global counter mode (set by --counter option) */
 extern rpv3_counter_mode_t rpv3_counter_mode;
 
+/* Global output file path (set by --output option) */
+extern char* rpv3_output_file;
+
+/* Global output directory path (set by --outputdir option) */
+extern char* rpv3_output_dir;
+
 /**
  * Parse options from the RPV3_OPTIONS environment variable
  * 
@@ -48,6 +55,8 @@ extern rpv3_counter_mode_t rpv3_counter_mode;
  *   --timeline : Enable timeline mode with GPU timestamps (sets rpv3_timeline_enabled)
  *   --csv : Enable CSV output mode (sets rpv3_csv_enabled)
  *   --counter <group> : Enable counter collection (compute, memory, mixed)
+ *   --output <filename> : Redirect output to specified file (sets rpv3_output_file)
+ *   --outputdir <directory> : Redirect output to directory with PID-based filename (sets rpv3_output_dir)
  * 
  * @return RPV3_OPTIONS_CONTINUE (0) to continue normal operation
  *         RPV3_OPTIONS_EXIT (1) to exit early without initializing profiler
