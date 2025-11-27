@@ -22,6 +22,12 @@ int rpv3_csv_enabled = 0;
 /* Global counter mode */
 rpv3_counter_mode_t rpv3_counter_mode = RPV3_COUNTER_MODE_NONE;
 
+/* Global output file path */
+char* rpv3_output_file = NULL;
+
+/* Global output directory path */
+char* rpv3_output_dir = NULL;
+
 /* Parse options from the RPV3_OPTIONS environment variable */
 int rpv3_parse_options(void) {
     const char* options_env = getenv("RPV3_OPTIONS");
@@ -58,6 +64,8 @@ int rpv3_parse_options(void) {
             printf("  --timeline   Enable timeline mode with GPU timestamps\n");
             printf("  --csv        Enable CSV output mode\n");
             printf("  --counter <group> Enable counter collection (compute, memory, mixed)\n");
+            printf("  --output <file>   Redirect output to specified file\n");
+            printf("  --outputdir <dir> Redirect output to directory with PID-based filename\n");
             printf("\nExample:\n");
             printf("  RPV3_OPTIONS=\"--version\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
             printf("  RPV3_OPTIONS=\"--timeline\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
@@ -72,6 +80,24 @@ int rpv3_parse_options(void) {
         else if (strcmp(token, "--csv") == 0) {
             rpv3_csv_enabled = 1;
             printf("[RPV3] CSV output mode enabled\n");
+        }
+        else if (strcmp(token, "--output") == 0) {
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) {
+                fprintf(stderr, "[RPV3] Error: --output requires a filename argument\n");
+            } else {
+                rpv3_output_file = strdup(token);
+                printf("[RPV3] Output will be written to: %s\n", rpv3_output_file);
+            }
+        }
+        else if (strcmp(token, "--outputdir") == 0) {
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) {
+                fprintf(stderr, "[RPV3] Error: --outputdir requires a directory argument\n");
+            } else {
+                rpv3_output_dir = strdup(token);
+                printf("[RPV3] Output directory: %s\n", rpv3_output_dir);
+            }
         }
         else if (strcmp(token, "--counter") == 0) {
             token = strtok(NULL, " \t\n");

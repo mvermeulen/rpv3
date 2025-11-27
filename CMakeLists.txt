@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(rocprof_kernel_tracer VERSION 1.3.0 LANGUAGES C CXX)
+project(rpv3_kernel_tracer VERSION 1.3.1 LANGUAGES C CXX)
 
 # Set C standard
 set(CMAKE_C_STANDARD 11)

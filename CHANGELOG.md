@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.3.1] - 2025-11-26
+### Added
+- **File Output Support**: Redirect profiler output to files
+  - `--output <file>`: Save output to a specific file
+  - `--outputdir <dir>`: Save output to a directory with PID-based naming (`rpv3_<pid>.txt` or `.csv`)
+
 ## [1.3.0] - 2025-11-26
 ### Added
 - **CSV Output Support**: Machine-readable CSV export for kernel execution data
@@ -15,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Compatible with timeline mode (`--csv --timeline`)
   - Integration test suite for CSV validation (`tests/test_csv_output.sh`)
   - Unit test for CSV option parsing
+- **File Output Support**: Redirect profiler output to files
+  - `--output <file>`: Save output to a specific file
+  - `--outputdir <dir>`: Save output to a directory with PID-based naming (`rpv3_<pid>.txt` or `.csv`)
 
 ### Changed
 - CSV output suppresses human-readable text for clean data export

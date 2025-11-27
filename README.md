@@ -97,6 +97,8 @@ The profiler supports configuration via the `RPV3_OPTIONS` environment variable.
 - `--help` or `-h` - Print help message and exit
 - `--timeline` - Enable timeline mode with GPU timestamps
 - `--csv` - Enable CSV output mode for machine-readable data export
+- `--output <file>` - Redirect output to the specified file
+- `--outputdir <dir>` - Redirect output to the specified directory using PID-based filenames
 - `--counter <group>` - Enable counter collection. Groups: `compute`, `memory`, `mixed`
 
 **Examples:**
@@ -113,6 +115,15 @@ RPV3_OPTIONS="--csv" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
 # CSV with timeline (accurate timestamps)
 RPV3_OPTIONS="--csv --timeline" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# Redirect output to a specific file
+RPV3_OPTIONS="--output trace.txt" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# Redirect output to a directory (creates rpv3_<pid>.txt)
+RPV3_OPTIONS="--outputdir /tmp" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# Redirect CSV output to a directory (creates rpv3_<pid>.csv)
+RPV3_OPTIONS="--csv --outputdir /tmp" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
 # Counter collection
 RPV3_OPTIONS="--counter compute" LD_PRELOAD=./libkernel_tracer.so ./example_app
@@ -206,7 +217,7 @@ RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring profiler v1.3.0 [1.3.0] (priority: 0)
+[Kernel Tracer] Configuring profiler v1.3.1 [1.3.1] (priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -246,7 +257,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring profiler v1.3.0 [1.3.0] (priority: 0)
+[Kernel Tracer] Configuring profiler v1.3.1 [1.3.1] (priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)
