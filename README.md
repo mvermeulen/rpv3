@@ -527,7 +527,9 @@ rpv3/
 │   ├── test_regression.sh     # Regression tests
 │   ├── test_counters.sh       # Counter collection tests
 │   ├── test_csv_output.sh     # CSV output tests
+│   ├── test_output_options.sh # Output options tests
 │   ├── run_tests.sh           # Master test runner
+│   ├── test_utils.sh          # Shared test utilities
 │   └── README.md              # Testing documentation
 ├── utils/                     # Utility tools
 │   ├── diagnose_counters.cpp  # Tool to list supported counters
