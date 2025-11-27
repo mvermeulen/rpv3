@@ -131,6 +131,12 @@ RPV3_OPTIONS="--csv --outputdir /tmp" LD_PRELOAD=./libkernel_tracer.so ./example
 
 # Counter collection
 RPV3_OPTIONS="--counter compute" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# RocBLAS logging (requires configured pipe)
+RPV3_OPTIONS="--csv --rocblas /tmp/pipe" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
+
+# RocBLAS logging with redirection to file
+RPV3_OPTIONS="--csv --rocblas /tmp/pipe --rocblas-log rocblas.log" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
 ```
 
 ### Timeline Support
