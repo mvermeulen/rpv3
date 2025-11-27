@@ -279,6 +279,19 @@ KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,Workgrou
 
 **Note**: Kernel names are quoted to handle commas in C++ function signatures.
 
+### CSV with Timeline Example
+
+With `--csv --timeline` options (includes accurate GPU timestamps):
+
+```csv
+KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs
+"vectorAdd(float const*, float const*, float*, int)",6215,1,18,1,1048576,1,1,256,1,1,0,0,961951699264,961951727998,28734,28.734,215.234
+"vectorMul(float const*, float const*, float*, int)",6215,2,17,2,1048576,1,1,256,1,1,0,0,961951944508,961951971920,27412,27.412,216.244
+"matrixTranspose(float const*, float*, int, int)",6215,3,16,3,512,512,1,16,16,1,0,0,961952375267,961952417026,41759,41.759,216.675
+```
+
+**Note**: Timeline mode populates timestamp columns with actual GPU timing data (nanosecond precision).
+
 ### Counter Collection Output
 
 With `--counter mixed` option:
