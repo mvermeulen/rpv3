@@ -541,3 +541,9 @@ The options parsing functionality (`rpv3_options.c`) is compiled once as an obje
 ## License
 
 This is a sample/demonstration project for educational purposes.
+
+---
+
+## Acknowledgments
+
+This project was developed with assistance from **Google Antigravity**, an AI-powered coding assistant.
