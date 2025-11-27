@@ -217,7 +217,7 @@ RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring profiler v1.3.1 [1.3.1] (priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.3.2 (Runtime: v1.0.0, Priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -257,7 +257,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring profiler v1.3.1 [1.3.1] (priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.3.2 (Runtime: v1.0.0, Priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)

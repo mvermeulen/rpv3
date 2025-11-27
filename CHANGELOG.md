@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.3.2] - 2025-11-26
+### Changed
+- Refined output redirection: Status messages now go to stdout when CSV output is redirected to a file.
+- Improved version display: Explicitly shows RPV3 version alongside ROCm Runtime version.
+- Fixed CSV header output in timeline mode to correctly respect file redirection.
+
 ## [1.3.1] - 2025-11-26
 ### Added
 - **File Output Support**: Redirect profiler output to files

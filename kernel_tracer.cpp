@@ -58,8 +58,13 @@ namespace {
     FILE* output_file = nullptr;
     char output_filename[512];
 
-    // Output macro to redirect to file if enabled, otherwise stdout
-    #define OUTPUT_PRINTF(...) fprintf(output_file ? output_file : stdout, __VA_ARGS__)
+    // Output macro for trace data (CSV or human-readable kernel details)
+    #define TRACE_PRINTF(...) fprintf(output_file ? output_file : stdout, __VA_ARGS__)
+
+    // Output macro for status messages (init, summary, errors)
+    // If CSV output is enabled AND we are writing to a file, status messages go to stdout
+    // Otherwise, they follow the trace output (to file if set, else stdout)
+    #define STATUS_PRINTF(...) fprintf((output_file && csv_enabled) ? stdout : (output_file ? output_file : stdout), __VA_ARGS__)
 }
 
 // Helper function to demangle C++ kernel names
@@ -128,7 +133,7 @@ void timeline_buffer_callback(
     if (csv_enabled) {
         static bool csv_header_printed = false;
         if (!csv_header_printed) {
-            OUTPUT_PRINTF("KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs\n");
+            TRACE_PRINTF("KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs\n");
             csv_header_printed = true;
         }
     }
@@ -162,52 +167,47 @@ void timeline_buffer_callback(
             }
             
             if (csv_enabled) {
-                // CSV output
-                OUTPUT_PRINTF("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
+                TRACE_PRINTF("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
                        kernel_name.c_str(),
-                       record->thread_id,
-                       record->correlation_id.internal,
-                       record->dispatch_info.kernel_id,
-                       record->dispatch_info.dispatch_id,
-                       record->dispatch_info.grid_size.x,
-                       record->dispatch_info.grid_size.y,
-                       record->dispatch_info.grid_size.z,
-                       record->dispatch_info.workgroup_size.x,
-                       record->dispatch_info.workgroup_size.y,
-                       record->dispatch_info.workgroup_size.z,
+                       (unsigned long)record->thread_id,
+                       (unsigned long)record->correlation_id.internal,
+                       (unsigned long)record->dispatch_info.kernel_id,
+                       (unsigned long)record->dispatch_info.dispatch_id,
+                       record->dispatch_info.grid_size.x, record->dispatch_info.grid_size.y, record->dispatch_info.grid_size.z,
+                       record->dispatch_info.workgroup_size.x, record->dispatch_info.workgroup_size.y, record->dispatch_info.workgroup_size.z,
                        record->dispatch_info.private_segment_size,
                        record->dispatch_info.group_segment_size,
-                       start_ns,
-                       end_ns,
-                       duration_ns,
+                       (unsigned long)start_ns,
+                       (unsigned long)end_ns,
+                       (unsigned long)(end_ns - start_ns),
                        duration_us,
                        time_since_start_ms);
             } else {
                 // Human-readable output
-                OUTPUT_PRINTF("\n[Kernel Trace #%lu]\n", count);
-                OUTPUT_PRINTF("  Kernel Name: %s\n", kernel_name.c_str());
-                OUTPUT_PRINTF("  Thread ID: %lu\n", record->thread_id);
-                OUTPUT_PRINTF("  Correlation ID: %lu\n", record->correlation_id.internal);
-                OUTPUT_PRINTF("  Kernel ID: %lu\n", record->dispatch_info.kernel_id);
-                OUTPUT_PRINTF("  Dispatch ID: %lu\n", record->dispatch_info.dispatch_id);
-                OUTPUT_PRINTF("  Grid Size: [%u, %u, %u]\n", 
+                TRACE_PRINTF("\n[Kernel Trace #%lu]\n", (unsigned long)count);
+                TRACE_PRINTF("  Kernel Name: %s\n", kernel_name.c_str());
+                TRACE_PRINTF("  Thread ID: %lu\n", (unsigned long)record->thread_id);
+                TRACE_PRINTF("  Correlation ID: %lu\n", (unsigned long)record->correlation_id.internal);
+                TRACE_PRINTF("  Kernel ID: %lu\n", (unsigned long)record->dispatch_info.kernel_id);
+                TRACE_PRINTF("  Dispatch ID: %lu\n", (unsigned long)record->dispatch_info.dispatch_id);
+                TRACE_PRINTF("  Grid Size: [%u, %u, %u]\n", 
                        record->dispatch_info.grid_size.x,
                        record->dispatch_info.grid_size.y,
                        record->dispatch_info.grid_size.z);
-                OUTPUT_PRINTF("  Workgroup Size: [%u, %u, %u]\n",
+                TRACE_PRINTF("  Workgroup Size: [%u, %u, %u]\n",
                        record->dispatch_info.workgroup_size.x,
                        record->dispatch_info.workgroup_size.y,
                        record->dispatch_info.workgroup_size.z);
-                OUTPUT_PRINTF("  Private Segment Size: %u bytes (scratch memory per work-item)\n",
+                TRACE_PRINTF("  Private Segment Size: %u bytes (scratch memory per work-item)\n",
                        record->dispatch_info.private_segment_size);
-                OUTPUT_PRINTF("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
+                TRACE_PRINTF("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
                        record->dispatch_info.group_segment_size);
                 
                 // Timeline information (only in buffer mode)
-                OUTPUT_PRINTF("  Start Timestamp: %lu ns\n", start_ns);
-                OUTPUT_PRINTF("  End Timestamp: %lu ns\n", end_ns);
-                OUTPUT_PRINTF("  Duration: %.3f μs\n", duration_us);
-                OUTPUT_PRINTF("  Time Since Start: %.3f ms\n", time_since_start_ms);
+                TRACE_PRINTF("  Start Timestamp: %lu ns\n", (unsigned long)start_ns);
+                TRACE_PRINTF("  End Timestamp: %lu ns\n", (unsigned long)end_ns);
+                TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
+                TRACE_PRINTF("  Time Since Start: %.3f ms\n", time_since_start_ms);
             }
         }
     }
@@ -225,7 +225,7 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
     if (csv_enabled) {
         static bool csv_header_printed = false;
         if (!csv_header_printed) {
-            OUTPUT_PRINTF("KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs\n");
+            TRACE_PRINTF("KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs\n");
             csv_header_printed = true;
         }
     }
@@ -245,7 +245,7 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
         auto* dispatch_data = static_cast<rocprofiler_callback_tracing_kernel_dispatch_data_t*>(record.payload);
         
         if (!dispatch_data) {
-            OUTPUT_PRINTF("[Kernel Trace #%lu] <no dispatch data>\n", count);
+            TRACE_PRINTF("[Kernel Trace #%lu] <no dispatch data>\n", (unsigned long)count);
             return;
         }
         
@@ -258,19 +258,19 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             kernel_name = it->second;
         }
         
-        OUTPUT_PRINTF("\n[Kernel Trace #%lu]\n", count);
-        OUTPUT_PRINTF("  Kernel Name: %s\n", kernel_name.c_str());
-        OUTPUT_PRINTF("  Thread ID: %lu\n", record.thread_id);
-        OUTPUT_PRINTF("  Correlation ID: %lu\n", record.correlation_id.internal);
-        OUTPUT_PRINTF("  Kernel ID: %lu\n", info.kernel_id);
-        OUTPUT_PRINTF("  Dispatch ID: %lu\n", info.dispatch_id);
-        OUTPUT_PRINTF("  Grid Size: [%u, %u, %u]\n", 
+        TRACE_PRINTF("\n[Kernel Trace #%lu]\n", (unsigned long)count);
+        TRACE_PRINTF("  Kernel Name: %s\n", kernel_name.c_str());
+        TRACE_PRINTF("  Thread ID: %lu\n", (unsigned long)record.thread_id);
+        TRACE_PRINTF("  Correlation ID: %lu\n", (unsigned long)record.correlation_id.internal);
+        TRACE_PRINTF("  Kernel ID: %lu\n", (unsigned long)info.kernel_id);
+        TRACE_PRINTF("  Dispatch ID: %lu\n", (unsigned long)info.dispatch_id);
+        TRACE_PRINTF("  Grid Size: [%u, %u, %u]\n", 
                info.grid_size.x, info.grid_size.y, info.grid_size.z);
-        OUTPUT_PRINTF("  Workgroup Size: [%u, %u, %u]\n",
+        TRACE_PRINTF("  Workgroup Size: [%u, %u, %u]\n",
                info.workgroup_size.x, info.workgroup_size.y, info.workgroup_size.z);
-        OUTPUT_PRINTF("  Private Segment Size: %u bytes (scratch memory per work-item)\n",
+        TRACE_PRINTF("  Private Segment Size: %u bytes (scratch memory per work-item)\n",
                info.private_segment_size);
-        OUTPUT_PRINTF("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
+        TRACE_PRINTF("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
                info.group_segment_size);
     }
     else if (record.kind == ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH &&
@@ -302,12 +302,12 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             double time_since_start_ms = (start_ns > tracer_start_timestamp) ? 
                                          ((start_ns - tracer_start_timestamp) / 1000000.0) : 0.0;
             
-            OUTPUT_PRINTF("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
+            TRACE_PRINTF("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
                    kernel_name.c_str(),
-                   record.thread_id,
-                   record.correlation_id.internal,
-                   info.kernel_id,
-                   info.dispatch_id,
+                   (unsigned long)record.thread_id,
+                   (unsigned long)record.correlation_id.internal,
+                   (unsigned long)info.kernel_id,
+                   (unsigned long)info.dispatch_id,
                    info.grid_size.x,
                    info.grid_size.y,
                    info.grid_size.z,
@@ -316,9 +316,9 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
                    info.workgroup_size.z,
                    info.private_segment_size,
                    info.group_segment_size,
-                   start_ns,
-                   end_ns,
-                   duration_ns,
+                   (unsigned long)start_ns,
+                   (unsigned long)end_ns,
+                   (unsigned long)duration_ns,
                    duration_us,
                    time_since_start_ms);
         } else {
@@ -327,9 +327,9 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
                 uint64_t duration_ns = dispatch_data->end_timestamp - dispatch_data->start_timestamp;
                 double duration_us = duration_ns / 1000.0;
                 
-                OUTPUT_PRINTF("  Start Timestamp: %lu ns\n", dispatch_data->start_timestamp);
-                OUTPUT_PRINTF("  End Timestamp: %lu ns\n", dispatch_data->end_timestamp);
-                OUTPUT_PRINTF("  Duration: %.3f μs\n", duration_us);
+                TRACE_PRINTF("  Start Timestamp: %lu ns\n", (unsigned long)dispatch_data->start_timestamp);
+                TRACE_PRINTF("  End Timestamp: %lu ns\n", (unsigned long)dispatch_data->end_timestamp);
+                TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
             }
         }
     }
@@ -337,7 +337,7 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
 
 // Setup buffer tracing (for timeline mode)
 int setup_buffer_tracing() {
-    OUTPUT_PRINTF("[Kernel Tracer] Setting up buffer tracing for timeline mode...\n");
+    STATUS_PRINTF("[Kernel Tracer] Setting up buffer tracing for timeline mode...\n");
     
     // Create buffer
     const size_t buffer_size = 8192;      // 8 KB
@@ -392,7 +392,7 @@ int setup_buffer_tracing() {
 
 // Setup callback tracing (for non-timeline mode)
 int setup_callback_tracing() {
-    OUTPUT_PRINTF("[Kernel Tracer] Setting up callback tracing...\n");
+    STATUS_PRINTF("[Kernel Tracer] Setting up callback tracing...\n");
     
     // Configure callback tracing for code object/kernel symbol registration
     if (rocprofiler_configure_callback_tracing_service(
@@ -449,7 +449,7 @@ void create_profile_for_agent(rocprofiler_agent_id_t agent_id) {
     // 1. Get all supported counters for this agent
     std::map<std::string, rocprofiler_counter_id_t> supported_counters;
     
-    OUTPUT_PRINTF("[Kernel Tracer] Debug: Querying counters for agent handle %lu\n", agent_id.handle);
+    STATUS_PRINTF("[Kernel Tracer] Debug: Querying counters for agent handle %lu\n", agent_id.handle);
     
     rocprofiler_status_t status = rocprofiler_iterate_agent_supported_counters(
         agent_id,
@@ -457,7 +457,7 @@ void create_profile_for_agent(rocprofiler_agent_id_t agent_id) {
             (void) agent;
             auto* available_counters = static_cast<std::map<std::string, rocprofiler_counter_id_t>*>(user_data);
             
-            OUTPUT_PRINTF("[Kernel Tracer] Debug: Callback received %zu counters\n", num_counters);
+            STATUS_PRINTF("[Kernel Tracer] Debug: Callback received %zu counters\n", num_counters);
             
             for (size_t i = 0; i < num_counters; i++) {
                 rocprofiler_counter_info_v0_t info;
@@ -470,9 +470,9 @@ void create_profile_for_agent(rocprofiler_agent_id_t agent_id) {
                 if (status == ROCPROFILER_STATUS_SUCCESS && info.name) {
                     (*available_counters)[std::string(info.name)] = counters[i];
                     // Print first few counters for debug
-                    if (i < 5) OUTPUT_PRINTF("[Kernel Tracer] Debug: Found counter %s\n", info.name);
+                    if (i < 5) STATUS_PRINTF("[Kernel Tracer] Debug: Found counter %s\n", info.name);
                 } else {
-                    OUTPUT_PRINTF("[Kernel Tracer] Debug: Failed to query info for counter %zu (status: %d)\n", i, status);
+                    STATUS_PRINTF("[Kernel Tracer] Debug: Failed to query info for counter %zu (status: %d)\n", i, status);
                 }
             }
             return ROCPROFILER_STATUS_SUCCESS;
@@ -481,28 +481,28 @@ void create_profile_for_agent(rocprofiler_agent_id_t agent_id) {
     );
     
     if (status != ROCPROFILER_STATUS_SUCCESS) {
-        OUTPUT_PRINTF("[Kernel Tracer] Debug: rocprofiler_iterate_agent_supported_counters failed with status %d\n", status);
+        STATUS_PRINTF("[Kernel Tracer] Debug: rocprofiler_iterate_agent_supported_counters failed with status %d\n", status);
     }
     
     // 2. Select counters that match our target list
     std::vector<std::string> target_names = get_target_counters(counter_mode);
     std::vector<rocprofiler_counter_id_t> selected_counters;
     
-    OUTPUT_PRINTF("[Kernel Tracer] Creating profile for agent. Targets: %zu, Supported: %zu\n", 
+    STATUS_PRINTF("[Kernel Tracer] Creating profile for agent. Targets: %zu, Supported: %zu\n", 
            target_names.size(), supported_counters.size());
            
     for (const auto& name : target_names) {
         auto it = supported_counters.find(name);
         if (it != supported_counters.end()) {
             selected_counters.push_back(it->second);
-            OUTPUT_PRINTF("  + Added counter: %s\n", name.c_str());
+            STATUS_PRINTF("  + Added counter: %s\n", name.c_str());
         } else {
-            OUTPUT_PRINTF("  - Counter not found: %s\n", name.c_str());
+            STATUS_PRINTF("  - Counter not found: %s\n", name.c_str());
         }
     }
     
     if (selected_counters.empty()) {
-        OUTPUT_PRINTF("[Kernel Tracer] Warning: No matching counters found for this agent\n");
+        STATUS_PRINTF("[Kernel Tracer] Warning: No matching counters found for this agent\n");
         return;
     }
     
@@ -517,7 +517,7 @@ void create_profile_for_agent(rocprofiler_agent_id_t agent_id) {
     
     if (status == ROCPROFILER_STATUS_SUCCESS) {
         agent_profiles[agent_id] = profile_id;
-        OUTPUT_PRINTF("[Kernel Tracer] Profile created successfully with %zu counters\n", selected_counters.size());
+        STATUS_PRINTF("[Kernel Tracer] Profile created successfully with %zu counters\n", selected_counters.size());
     } else {
         fprintf(stderr, "[Kernel Tracer] Failed to create profile config: %d\n", status);
     }
@@ -593,7 +593,7 @@ void counter_record_callback(
             
             // We'll just print: [Counters] Dispatch ID: X, Value: Z
             
-            OUTPUT_PRINTF("[Counters] Dispatch ID: %lu, Value: %f\n",
+            STATUS_PRINTF("[Counters] Dispatch ID: %lu, Value: %f\n",
                    record->dispatch_id, record->counter_value);
         }
     }
@@ -601,7 +601,7 @@ void counter_record_callback(
 
 // Setup counter collection
 int setup_counter_collection() {
-    OUTPUT_PRINTF("[Kernel Tracer] Setting up counter collection...\n");
+    STATUS_PRINTF("[Kernel Tracer] Setting up counter collection...\n");
     
     // IMPORTANT: Counter collection also needs code object callback for kernel symbols
     // Configure callback tracing for code object/kernel symbol registration
@@ -640,7 +640,7 @@ int setup_counter_collection() {
     );
     
     if (agents.empty()) {
-        OUTPUT_PRINTF("[Kernel Tracer] No GPU agents found for counter collection\n");
+        STATUS_PRINTF("[Kernel Tracer] No GPU agents found for counter collection\n");
         return 0;
     }
     
@@ -655,8 +655,8 @@ int setup_counter_collection() {
     }
     
     if (!any_agent_supported) {
-        OUTPUT_PRINTF("[Kernel Tracer] Warning: No agents support counter collection or no counters found. Counter collection disabled.\n");
-        OUTPUT_PRINTF("[Kernel Tracer] Falling back to callback tracing mode...\n");
+        STATUS_PRINTF("[Kernel Tracer] Warning: No agents support counter collection or no counters found. Counter collection disabled.\n");
+        STATUS_PRINTF("[Kernel Tracer] Falling back to callback tracing mode...\n");
         // Fall back to regular callback tracing since counters aren't available
         // Code object callback is already configured above
         // Just need to add kernel dispatch callback
@@ -735,7 +735,7 @@ int setup_counter_collection() {
         return 0;
     }
     
-    OUTPUT_PRINTF("[Kernel Tracer] Counter collection configured successfully\n");
+    STATUS_PRINTF("[Kernel Tracer] Counter collection configured successfully\n");
     return 0;
 }
 
@@ -746,7 +746,7 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     (void) fini_func;
     (void) tool_data;
     
-    OUTPUT_PRINTF("[Kernel Tracer] Initializing profiler tool...\n");
+    STATUS_PRINTF("[Kernel Tracer] Initializing profiler tool...\n");
     
     // Check if timeline mode is enabled (from rpv3_options)
     timeline_enabled = (rpv3_timeline_enabled != 0);
@@ -784,7 +784,7 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     counter_mode = rpv3_counter_mode;
     
     if (timeline_enabled) {
-        OUTPUT_PRINTF("[Kernel Tracer] Timeline mode enabled\n");
+        STATUS_PRINTF("[Kernel Tracer] Timeline mode enabled\n");
         // Capture baseline timestamp when tracer starts
         rocprofiler_get_timestamp(&tracer_start_timestamp);
     } else if (csv_enabled) {
@@ -793,7 +793,7 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     }
     
     if (counter_mode != RPV3_COUNTER_MODE_NONE) {
-        OUTPUT_PRINTF("[Kernel Tracer] Counter collection enabled (mode: %d)\n", counter_mode);
+        STATUS_PRINTF("[Kernel Tracer] Counter collection enabled (mode: %d)\n", counter_mode);
     }
     
     // Create a context for profiling
@@ -830,7 +830,7 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
         return -1;
     }
     
-    OUTPUT_PRINTF("[Kernel Tracer] Profiler initialized successfully\n");
+    STATUS_PRINTF("[Kernel Tracer] Profiler initialized successfully\n");
     
     return 0;
 }
@@ -839,15 +839,15 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
 void tool_fini(void* tool_data) {
     (void) tool_data;
     
-    OUTPUT_PRINTF("\n[Kernel Tracer] Finalizing profiler tool...\n");
+    STATUS_PRINTF("\n[Kernel Tracer] Finalizing profiler tool...\n");
     
     // Flush buffer if in timeline mode
     if (timeline_enabled && trace_buffer.handle != 0) {
         rocprofiler_flush_buffer(trace_buffer);
     }
     
-    OUTPUT_PRINTF("[Kernel Tracer] Total kernels traced: %lu\n", kernel_count.load());
-    OUTPUT_PRINTF("[Kernel Tracer] Unique kernel symbols tracked: %zu\n", kernel_names.size());
+    STATUS_PRINTF("[Kernel Tracer] Total kernels traced: %lu\n", kernel_count.load());
+    STATUS_PRINTF("[Kernel Tracer] Unique kernel symbols tracked: %zu\n", kernel_names.size());
     
     // Stop context if still active
     if (client_ctx.handle != 0) {
@@ -890,8 +890,8 @@ extern "C" {
         uint32_t minor = (version % 10000) / 100;
         uint32_t patch = version % 100;
         
-        OUTPUT_PRINTF("[Kernel Tracer] Configuring profiler v%u.%u.%u [%s] (priority: %u)\n",
-               major, minor, patch, runtime_version, priority);
+        STATUS_PRINTF("[Kernel Tracer] Configuring RPV3 v%s (Runtime: v%u.%u.%u, Priority: %u)\n",
+           RPV3_VERSION, major, minor, patch, priority);
         
         // Store client ID
         client_id = id;

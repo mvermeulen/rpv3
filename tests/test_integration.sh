@@ -40,7 +40,7 @@ assert_file_exists "$BUILD_DIR/example_app" "Example app exists"
 print_info "Testing --version option with C++ library..."
 output=$(RPV3_OPTIONS="--version" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1 || true)
 assert_contains "$output" "RPV3 Kernel Tracer version" "Version output contains version string"
-assert_contains "$output" "1.3.1" "Version output contains correct version number"
+assert_contains "$output" "1.3.2" "Version output contains correct version number"
 
 
 # Test 3: Version option (C library)
@@ -58,7 +58,7 @@ assert_contains "$output" "--help" "Help output mentions --help option"
 # Test 5: Kernel tracing (C++ library)
 print_info "Testing kernel tracing with C++ library..."
 output=$(LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
-assert_contains "$output" "Kernel Tracer.*Configuring profiler" "Profiler configures successfully"
+assert_contains "$output" "Kernel Tracer.*Configuring RPV3" "Profiler configures successfully"
 assert_contains "$output" "Kernel Trace #1" "First kernel is traced"
 assert_contains "$output" "Kernel Trace #2" "Second kernel is traced"
 assert_contains "$output" "Kernel Trace #3" "Third kernel is traced"
@@ -72,7 +72,7 @@ assert_contains "$output" "Total kernels traced: 3" "Correct kernel count in sum
 # Test 6: Kernel tracing (C library)
 print_info "Testing kernel tracing with C library..."
 output=$(LD_PRELOAD="$BUILD_DIR/libkernel_tracer_c.so" "$BUILD_DIR/example_app" 2>&1)
-assert_contains "$output" "Kernel Tracer.*Configuring profiler" "C library profiler configures successfully"
+assert_contains "$output" "Kernel Tracer.*Configuring RPV3" "C library profiler configures successfully"
 assert_contains "$output" "Kernel Trace #1" "C library traces first kernel"
 assert_contains "$output" "Kernel Trace #2" "C library traces second kernel"
 assert_contains "$output" "Kernel Trace #3" "C library traces third kernel"
