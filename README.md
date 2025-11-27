@@ -520,7 +520,8 @@ rpv3/
 ├── example_app.cpp            # Sample HIP application for testing
 ├── docs/                      # Documentation
 │   ├── counter_collection_research.md  # Performance counter collection research
-│   └── research_kernel_args.md         # Kernel argument access research
+│   ├── research_kernel_args.md         # Kernel argument access research
+│   └── csv_implementation_plan.md      # CSV feature implementation plan
 ├── tests/                     # Test suite
 │   ├── test_rpv3_options.c    # Unit tests for options parser
 │   ├── test_integration.sh    # Integration tests
@@ -538,6 +539,7 @@ rpv3/
 │   └── README.md              # Utilities documentation
 ├── Makefile                   # Make-based build system
 ├── CMakeLists.txt             # CMake-based build system
+├── C_vs_CPP_COMPARISON.md     # Comparison of C and C++ implementations
 └── README.md                  # This file
 ```
 
