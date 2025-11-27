@@ -972,9 +972,7 @@ void tool_fini(void* tool_data) {
         rocblas_log_file = NULL;
     }
 
-    if (output_file && output_file != stdout) {
-        fclose(output_file);
-    }
+
     
     // Flush buffer if in timeline mode
     if (timeline_enabled && trace_buffer.handle != 0) {
