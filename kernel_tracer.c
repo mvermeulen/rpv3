@@ -567,6 +567,22 @@ void create_profile_for_agent(rocprofiler_agent_id_t agent_id) {
 int setup_counter_collection() {
     printf("[Kernel Tracer] Setting up counter collection...\n");
     
+    /* IMPORTANT: Counter collection also needs code object callback for kernel symbols */
+    /* Configure callback tracing for code object/kernel symbol registration */
+    rocprofiler_status_t status = rocprofiler_configure_callback_tracing_service(
+        client_ctx,
+        ROCPROFILER_CALLBACK_TRACING_CODE_OBJECT,
+        NULL,
+        0,
+        kernel_symbol_callback,
+        NULL
+    );
+    
+    if (status != ROCPROFILER_STATUS_SUCCESS) {
+        fprintf(stderr, "[Kernel Tracer] Failed to configure code object callback tracing\n");
+        return -1;
+    }
+    
     /* 1. Query agents */
     struct agent_data_t {
         rocprofiler_agent_id_t agents[MAX_AGENTS];
@@ -599,6 +615,24 @@ int setup_counter_collection() {
     
     if (!any_agent_supported) {
         printf("[Kernel Tracer] Warning: No agents support counter collection or no counters found. Counter collection disabled.\n");
+        printf("[Kernel Tracer] Falling back to callback tracing mode...\n");
+        /* Fall back to regular callback tracing since counters aren't available */
+        /* Code object callback is already configured above */
+        /* Just need to add kernel dispatch callback */
+        status = rocprofiler_configure_callback_tracing_service(
+            client_ctx,
+            ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH,
+            NULL,
+            0,
+            kernel_dispatch_callback,
+            NULL
+        );
+        
+        if (status != ROCPROFILER_STATUS_SUCCESS) {
+            fprintf(stderr, "[Kernel Tracer] Failed to configure kernel dispatch callback tracing\n");
+            return -1;
+        }
+        
         return 0;
     }
     
@@ -606,7 +640,7 @@ int setup_counter_collection() {
     const size_t buffer_size = 64 * 1024;
     const size_t buffer_watermark = 56 * 1024;
     
-    rocprofiler_status_t status = rocprofiler_create_buffer(
+    status = rocprofiler_create_buffer(
         client_ctx,
         buffer_size,
         buffer_watermark,
@@ -630,10 +664,37 @@ int setup_counter_collection() {
     );
     
     if (status != ROCPROFILER_STATUS_SUCCESS) {
-        fprintf(stderr, "[Kernel Tracer] Failed to configure dispatch counting service\n");
-        return -1;
+        fprintf(stderr, "[Kernel Tracer] Warning: Failed to configure dispatch counting service (status: %d)\n", status);
+        fprintf(stderr, "[Kernel Tracer] This hardware/ROCm version may not support counter collection.\n");
+        fprintf(stderr, "[Kernel Tracer] Falling back to callback tracing mode...\n");
+        
+        /* Destroy the counter buffer since we won't use it */
+        if (counter_buffer.handle != 0) {
+            rocprofiler_destroy_buffer(counter_buffer);
+            counter_buffer.handle = 0;
+        }
+        
+        /* Fall back to callback tracing */
+        /* Code object callback is already configured */
+        /* Just need to add kernel dispatch callback */
+        status = rocprofiler_configure_callback_tracing_service(
+            client_ctx,
+            ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH,
+            NULL,
+            0,
+            kernel_dispatch_callback,
+            NULL
+        );
+        
+        if (status != ROCPROFILER_STATUS_SUCCESS) {
+            fprintf(stderr, "[Kernel Tracer] Failed to configure kernel dispatch callback tracing\n");
+            return -1;
+        }
+        
+        return 0;
     }
     
+    printf("[Kernel Tracer] Counter collection configured successfully\n");
     return 0;
 }
 

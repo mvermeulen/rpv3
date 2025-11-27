@@ -236,7 +236,7 @@ When running the example application with the profiler, you should see detailed 
 ### C++ Version (Demangled Kernel Names)
 
 ```
-[Kernel Tracer] Configuring profiler v1.2.1 [1.2.1] (priority: 0)
+[Kernel Tracer] Configuring profiler v1.2.3 [1.2.3] (priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -301,7 +301,7 @@ When timeline mode is enabled, the output includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring profiler v1.2.1 [1.2.1] (priority: 0)
+[Kernel Tracer] Configuring profiler v1.2.3 [1.2.3] (priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Timeline mode enabled
 [Kernel Tracer] Setting up buffer tracing for timeline mode...
