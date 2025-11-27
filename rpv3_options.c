@@ -16,6 +16,9 @@
 /* Global flag for timeline mode */
 int rpv3_timeline_enabled = 0;
 
+/* Global flag for CSV output mode */
+int rpv3_csv_enabled = 0;
+
 /* Global counter mode */
 rpv3_counter_mode_t rpv3_counter_mode = RPV3_COUNTER_MODE_NONE;
 
@@ -53,16 +56,22 @@ int rpv3_parse_options(void) {
             printf("  --version    Print version information and exit\n");
             printf("  --help, -h   Print this help message and exit\n");
             printf("  --timeline   Enable timeline mode with GPU timestamps\n");
+            printf("  --csv        Enable CSV output mode\n");
             printf("  --counter <group> Enable counter collection (compute, memory, mixed)\n");
             printf("\nExample:\n");
             printf("  RPV3_OPTIONS=\"--version\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
             printf("  RPV3_OPTIONS=\"--timeline\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
+            printf("  RPV3_OPTIONS=\"--csv\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
             printf("  RPV3_OPTIONS=\"--counter compute\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
             should_exit = 1;
         }
         else if (strcmp(token, "--timeline") == 0) {
             rpv3_timeline_enabled = 1;
             printf("[RPV3] Timeline mode enabled\n");
+        }
+        else if (strcmp(token, "--csv") == 0) {
+            rpv3_csv_enabled = 1;
+            printf("[RPV3] CSV output mode enabled\n");
         }
         else if (strcmp(token, "--counter") == 0) {
             token = strtok(NULL, " \t\n");

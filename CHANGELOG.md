@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.3.0] - 2025-11-26
+### Added
+- **CSV Output Support**: Machine-readable CSV export for kernel execution data
+  - New `--csv` option to enable CSV output mode
+  - 18-column CSV format with kernel name, dimensions, memory segments, and timing data
+  - Kernel names properly quoted to handle commas in C++ function signatures
+  - Compatible with timeline mode (`--csv --timeline`)
+  - Integration test suite for CSV validation (`tests/test_csv_output.sh`)
+  - Unit test for CSV option parsing
+
+### Changed
+- CSV output suppresses human-readable text for clean data export
+- Timeline mode now captures start timestamp even when CSV-only mode is enabled
+- **Documentation**: Reorganized README.md with improved structure
+  - Added table of contents for easy navigation
+  - Grouped all example output in dedicated section
+  - Consolidated troubleshooting into single comprehensive section
+  - Reorganized features for better discoverability
+  - Improved quick start guide
+
 ## [1.2.3] - 2025-11-26
 ### Fixed
 - Counter collection now properly registers code object callback for kernel symbol tracking.

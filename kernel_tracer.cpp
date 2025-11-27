@@ -36,6 +36,9 @@ namespace {
     uint64_t tracer_start_timestamp = 0;  // Baseline timestamp when tracer starts
     rocprofiler_buffer_id_t trace_buffer = {};
 
+    // CSV output mode state
+    bool csv_enabled = false;
+
     // Counter collection state
     rpv3_counter_mode_t counter_mode = RPV3_COUNTER_MODE_NONE;
     
@@ -111,6 +114,15 @@ void timeline_buffer_callback(
         fprintf(stderr, "[Kernel Tracer] Warning: Dropped %lu records\n", drop_count);
     }
     
+    // CSV header output (once per process)
+    if (csv_enabled) {
+        static bool csv_header_printed = false;
+        if (!csv_header_printed) {
+            printf("KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs\n");
+            csv_header_printed = true;
+        }
+    }
+    
     // Process batch of records
     for (size_t i = 0; i < num_headers; i++) {
         rocprofiler_record_header_t* header = headers[i];
@@ -127,6 +139,7 @@ void timeline_buffer_callback(
             uint64_t start_ns = record->start_timestamp;
             uint64_t end_ns = record->end_timestamp;
             uint64_t duration_ns = end_ns - start_ns;
+            double duration_us = duration_ns / 1000.0;
             
             // Calculate time since tracer started
             double time_since_start_ms = (start_ns - tracer_start_timestamp) / 1000000.0;
@@ -138,31 +151,54 @@ void timeline_buffer_callback(
                 kernel_name = it->second;
             }
             
-            // Print all dispatch information with timeline data
-            printf("\n[Kernel Trace #%lu]\n", count);
-            printf("  Kernel Name: %s\n", kernel_name.c_str());
-            printf("  Thread ID: %lu\n", record->thread_id);
-            printf("  Correlation ID: %lu\n", record->correlation_id.internal);
-            printf("  Kernel ID: %lu\n", record->dispatch_info.kernel_id);
-            printf("  Dispatch ID: %lu\n", record->dispatch_info.dispatch_id);
-            printf("  Grid Size: [%u, %u, %u]\n", 
-                   record->dispatch_info.grid_size.x,
-                   record->dispatch_info.grid_size.y,
-                   record->dispatch_info.grid_size.z);
-            printf("  Workgroup Size: [%u, %u, %u]\n",
-                   record->dispatch_info.workgroup_size.x,
-                   record->dispatch_info.workgroup_size.y,
-                   record->dispatch_info.workgroup_size.z);
-            printf("  Private Segment Size: %u bytes (scratch memory per work-item)\n",
-                   record->dispatch_info.private_segment_size);
-            printf("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
-                   record->dispatch_info.group_segment_size);
-            
-            // Timeline information (only in buffer mode)
-            printf("  Start Timestamp: %lu ns\n", start_ns);
-            printf("  End Timestamp: %lu ns\n", end_ns);
-            printf("  Duration: %.3f μs\n", duration_ns / 1000.0);
-            printf("  Time Since Start: %.3f ms\n", time_since_start_ms);
+            if (csv_enabled) {
+                // CSV output
+                printf("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
+                       kernel_name.c_str(),
+                       record->thread_id,
+                       record->correlation_id.internal,
+                       record->dispatch_info.kernel_id,
+                       record->dispatch_info.dispatch_id,
+                       record->dispatch_info.grid_size.x,
+                       record->dispatch_info.grid_size.y,
+                       record->dispatch_info.grid_size.z,
+                       record->dispatch_info.workgroup_size.x,
+                       record->dispatch_info.workgroup_size.y,
+                       record->dispatch_info.workgroup_size.z,
+                       record->dispatch_info.private_segment_size,
+                       record->dispatch_info.group_segment_size,
+                       start_ns,
+                       end_ns,
+                       duration_ns,
+                       duration_us,
+                       time_since_start_ms);
+            } else {
+                // Human-readable output
+                printf("\n[Kernel Trace #%lu]\n", count);
+                printf("  Kernel Name: %s\n", kernel_name.c_str());
+                printf("  Thread ID: %lu\n", record->thread_id);
+                printf("  Correlation ID: %lu\n", record->correlation_id.internal);
+                printf("  Kernel ID: %lu\n", record->dispatch_info.kernel_id);
+                printf("  Dispatch ID: %lu\n", record->dispatch_info.dispatch_id);
+                printf("  Grid Size: [%u, %u, %u]\n", 
+                       record->dispatch_info.grid_size.x,
+                       record->dispatch_info.grid_size.y,
+                       record->dispatch_info.grid_size.z);
+                printf("  Workgroup Size: [%u, %u, %u]\n",
+                       record->dispatch_info.workgroup_size.x,
+                       record->dispatch_info.workgroup_size.y,
+                       record->dispatch_info.workgroup_size.z);
+                printf("  Private Segment Size: %u bytes (scratch memory per work-item)\n",
+                       record->dispatch_info.private_segment_size);
+                printf("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
+                       record->dispatch_info.group_segment_size);
+                
+                // Timeline information (only in buffer mode)
+                printf("  Start Timestamp: %lu ns\n", start_ns);
+                printf("  End Timestamp: %lu ns\n", end_ns);
+                printf("  Duration: %.3f μs\n", duration_us);
+                printf("  Time Since Start: %.3f ms\n", time_since_start_ms);
+            }
         }
     }
 }
@@ -175,9 +211,23 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
     (void) user_data;
     (void) callback_data;
     
+    // CSV header output (once per process)
+    if (csv_enabled) {
+        static bool csv_header_printed = false;
+        if (!csv_header_printed) {
+            printf("KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs\n");
+            csv_header_printed = true;
+        }
+    }
+    
     // Only process kernel dispatch events on entry
     if (record.kind == ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH &&
         record.phase == ROCPROFILER_CALLBACK_PHASE_ENTER) {
+        
+        // In CSV mode, suppress ENTER phase output
+        if (csv_enabled) {
+            return;
+        }
         
         uint64_t count = kernel_count.fetch_add(1) + 1;
         
@@ -216,16 +266,61 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
     else if (record.kind == ROCPROFILER_CALLBACK_TRACING_KERNEL_DISPATCH &&
              record.phase == ROCPROFILER_CALLBACK_PHASE_EXIT) {
         
-        // Display timestamps on exit
+        // Cast payload to kernel dispatch data
         auto* dispatch_data = static_cast<rocprofiler_callback_tracing_kernel_dispatch_data_t*>(record.payload);
         
-        if (dispatch_data && dispatch_data->end_timestamp > 0) {
-            uint64_t duration_ns = dispatch_data->end_timestamp - dispatch_data->start_timestamp;
-            double duration_us = duration_ns / 1000.0;
+        if (!dispatch_data) {
+            return;
+        }
+        
+        if (csv_enabled) {
+            // CSV mode: output complete line on EXIT
+            uint64_t count = kernel_count.fetch_add(1) + 1;
+            (void)count;  // Suppress unused variable warning
             
-            printf("  Start Timestamp: %lu ns\n", dispatch_data->start_timestamp);
-            printf("  End Timestamp: %lu ns\n", dispatch_data->end_timestamp);
-            printf("  Duration: %.3f μs\n", duration_us);
+            const auto& info = dispatch_data->dispatch_info;
+            std::string kernel_name = "<unknown>";
+            auto it = kernel_names.find(info.kernel_id);
+            if (it != kernel_names.end()) {
+                kernel_name = it->second;
+            }
+            
+            uint64_t start_ns = dispatch_data->start_timestamp;
+            uint64_t end_ns = dispatch_data->end_timestamp;
+            uint64_t duration_ns = (end_ns > start_ns) ? (end_ns - start_ns) : 0;
+            double duration_us = duration_ns / 1000.0;
+            double time_since_start_ms = (start_ns > tracer_start_timestamp) ? 
+                                         ((start_ns - tracer_start_timestamp) / 1000000.0) : 0.0;
+            
+            printf("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
+                   kernel_name.c_str(),
+                   record.thread_id,
+                   record.correlation_id.internal,
+                   info.kernel_id,
+                   info.dispatch_id,
+                   info.grid_size.x,
+                   info.grid_size.y,
+                   info.grid_size.z,
+                   info.workgroup_size.x,
+                   info.workgroup_size.y,
+                   info.workgroup_size.z,
+                   info.private_segment_size,
+                   info.group_segment_size,
+                   start_ns,
+                   end_ns,
+                   duration_ns,
+                   duration_us,
+                   time_since_start_ms);
+        } else {
+            // Standard mode: display timestamps on exit
+            if (dispatch_data->end_timestamp > 0) {
+                uint64_t duration_ns = dispatch_data->end_timestamp - dispatch_data->start_timestamp;
+                double duration_us = duration_ns / 1000.0;
+                
+                printf("  Start Timestamp: %lu ns\n", dispatch_data->start_timestamp);
+                printf("  End Timestamp: %lu ns\n", dispatch_data->end_timestamp);
+                printf("  Duration: %.3f μs\n", duration_us);
+            }
         }
     }
 }
@@ -646,12 +741,18 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     // Check if timeline mode is enabled (from rpv3_options)
     timeline_enabled = (rpv3_timeline_enabled != 0);
     
+    // Check if CSV mode is enabled (from rpv3_options)
+    csv_enabled = (rpv3_csv_enabled != 0);
+    
     // Check if counter mode is enabled
     counter_mode = rpv3_counter_mode;
     
     if (timeline_enabled) {
         printf("[Kernel Tracer] Timeline mode enabled\n");
         // Capture baseline timestamp when tracer starts
+        rocprofiler_get_timestamp(&tracer_start_timestamp);
+    } else if (csv_enabled) {
+        // CSV mode needs start timestamp even without timeline
         rocprofiler_get_timestamp(&tracer_start_timestamp);
     }
     

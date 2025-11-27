@@ -154,6 +154,16 @@ TEST(tab_separated_options) {
     ASSERT_EQUALS(RPV3_OPTIONS_EXIT, result, "Should handle tab-separated options");
 }
 
+TEST(csv_option) {
+    setenv("RPV3_OPTIONS", "--csv", 1);
+    rpv3_csv_enabled = 0;
+    redirect_output();
+    int result = rpv3_parse_options();
+    restore_output();
+    ASSERT_EQUALS(RPV3_OPTIONS_CONTINUE, result, "--csv should return CONTINUE");
+    ASSERT_EQUALS(1, rpv3_csv_enabled, "rpv3_csv_enabled should be set to 1");
+}
+
 /* Main test runner */
 int main() {
     printf("\n");
@@ -174,6 +184,7 @@ int main() {
     run_test_mixed_valid_invalid_options();
     run_test_whitespace_handling();
     run_test_tab_separated_options();
+    run_test_csv_option();
 
     /* Print summary */
     printf("\n");
