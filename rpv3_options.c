@@ -28,6 +28,12 @@ char* rpv3_output_file = NULL;
 /* Global output directory path */
 char* rpv3_output_dir = NULL;
 
+/* Global rocBLAS log pipe path */
+char* rpv3_rocblas_pipe = NULL;
+
+/* Global rocBLAS log file path */
+char* rpv3_rocblas_log_file = NULL;
+
 /* Parse options from the RPV3_OPTIONS environment variable */
 int rpv3_parse_options(void) {
     const char* options_env = getenv("RPV3_OPTIONS");
@@ -66,6 +72,8 @@ int rpv3_parse_options(void) {
             printf("  --counter <group> Enable counter collection (compute, memory, mixed)\n");
             printf("  --output <file>   Redirect output to specified file\n");
             printf("  --outputdir <dir> Redirect output to directory with PID-based filename\n");
+            printf("  --rocblas <pipe>  Read rocBLAS logs from named pipe\n");
+            printf("  --rocblas-log <file> Redirect rocBLAS logs to file (requires --rocblas)\n");
             printf("\nExample:\n");
             printf("  RPV3_OPTIONS=\"--version\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
             printf("  RPV3_OPTIONS=\"--timeline\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
@@ -97,6 +105,24 @@ int rpv3_parse_options(void) {
             } else {
                 rpv3_output_dir = strdup(token);
                 printf("[RPV3] Output directory: %s\n", rpv3_output_dir);
+            }
+        }
+        else if (strcmp(token, "--rocblas") == 0) {
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) {
+                fprintf(stderr, "[RPV3] Error: --rocblas requires a pipe name argument\n");
+            } else {
+                rpv3_rocblas_pipe = strdup(token);
+                printf("[RPV3] RocBLAS log pipe: %s\n", rpv3_rocblas_pipe);
+            }
+        }
+        else if (strcmp(token, "--rocblas-log") == 0) {
+            token = strtok(NULL, " \t\n");
+            if (token == NULL) {
+                fprintf(stderr, "[RPV3] Error: --rocblas-log requires a filename argument\n");
+            } else {
+                rpv3_rocblas_log_file = strdup(token);
+                printf("[RPV3] RocBLAS log file: %s\n", rpv3_rocblas_log_file);
             }
         }
         else if (strcmp(token, "--counter") == 0) {

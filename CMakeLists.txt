@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(rpv3_kernel_tracer VERSION 1.3.2 LANGUAGES C CXX)
+project(rpv3_kernel_tracer VERSION 1.4.0 LANGUAGES C CXX)
 
 # Set C standard
 set(CMAKE_C_STANDARD 11)
@@ -64,6 +64,11 @@ add_custom_command(
 )
 
 add_custom_target(example_app ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/example_app)
+
+# Build the rocBLAS example application
+find_package(rocblas REQUIRED)
+add_executable(example_rocblas example_rocblas.cpp)
+target_link_libraries(example_rocblas PRIVATE roc::rocblas hip::host)
 
 # Enable testing
 enable_testing()

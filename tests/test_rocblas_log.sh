@@ -29,31 +29,22 @@ mkfifo $FIFO_PATH
 
 echo "Created FIFO at $FIFO_PATH"
 
-# Start a background process to write to the FIFO
-# We'll write multiple lines to ensure one is picked up.
-(
-    echo "Writing to FIFO..."
-    echo "rocBLAS kernel launch info: size=1024, alpha=1.0" > $FIFO_PATH
-    echo "Another log entry" > $FIFO_PATH
-) &
-BG_PID=$!
+# Start a background process to write to the FIFO - REMOVED
+# We rely on example_rocblas to write to the pipe via ROCBLAS_LOG_TRACE_PATH
 
 # Run the app with the tracer and environment variables
 echo "Running app with tracer..."
 export RPV3_OPTIONS="--csv --rocblas $FIFO_PATH"
 export ROCBLAS_LAYER=1
-export ROCBLAS_LOG_TRACE=$FIFO_PATH
+export ROCBLAS_LOG_TRACE_PATH=$FIFO_PATH
 export LD_PRELOAD=./libkernel_tracer.so
 
 ./example_rocblas > output.csv 2>&1
-# Kill background writer if still running
-kill $BG_PID 2>/dev/null
-wait $BG_PID 2>/dev/null
 
 echo "Checking output..."
 cat output.csv
 
-if grep -q "# rocBLAS kernel launch info" output.csv; then
+if grep -q "# rocblas_sgemm" output.csv; then
     echo "SUCCESS: Found rocBLAS log in trace output"
 else
     echo "FAILURE: Did not find rocBLAS log in trace output"
@@ -84,14 +75,13 @@ if [ -f "rocblas_test.log" ] && grep -q "Mock RocBLAS Log Entry" rocblas_test.lo
     echo "SUCCESS: Found mock log in redirected file"
 else
     echo "FAILURE: Did not find mock log in redirected file"
-    if [ -f "rocblas_test.log" ]; then
-        echo "File content:"
-        cat rocblas_test.log
-    else
-        echo "File rocblas_test.log not created"
-    fi
-    echo "Trace Output (output.csv):"
-    cat output.csv
+    exit 1
+fi
+
+if grep -q "# Mock RocBLAS Log Entry" output.csv; then
+    echo "SUCCESS: Found mock log in trace output (with # prefix)"
+else
+    echo "FAILURE: Did not find mock log in trace output"
     exit 1
 fi
 

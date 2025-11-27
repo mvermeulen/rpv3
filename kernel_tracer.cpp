@@ -25,6 +25,9 @@
 #include <cxxabi.h>
 #include <unistd.h>
 #include <cerrno>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 #include "rpv3_options.h"
 
@@ -58,6 +61,13 @@ namespace {
     FILE* output_file = nullptr;
     char output_filename[512];
 
+    // RocBLAS Log Pipe state
+    int rocblas_pipe_fd = -1;
+    // RocBLAS log pipe path
+static char rocblas_pipe_path[256] = {0};
+
+// RocBLAS log file handle
+static FILE* rocblas_log_file = NULL;
     // Output macro for trace data (CSV or human-readable kernel details)
     #define TRACE_PRINTF(...) fprintf(output_file ? output_file : stdout, __VA_ARGS__)
 
@@ -302,6 +312,56 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             double time_since_start_ms = (start_ns > tracer_start_timestamp) ? 
                                          ((start_ns - tracer_start_timestamp) / 1000000.0) : 0.0;
             
+            // Read from RocBLAS pipe if available
+            char rocblas_log[512] = {0};
+    /* Read from RocBLAS pipe if available */
+    if (rocblas_pipe_fd != -1) {
+        ssize_t bytes_read = -1;
+        int retries = 0;
+        while (retries < 100) {
+            bytes_read = read(rocblas_pipe_fd, rocblas_log, sizeof(rocblas_log) - 1);
+            if (bytes_read > 0) break;
+            if (bytes_read == -1 && errno == EAGAIN) {
+                // Wait a bit and retry
+                usleep(10000); // 10ms
+                retries++;
+            } else {
+                break;
+            }
+        }
+        
+        if (bytes_read > 0) {
+            rocblas_log[bytes_read] = '\0';
+            // Remove trailing newline
+            if (rocblas_log[bytes_read - 1] == '\n') {
+                rocblas_log[bytes_read - 1] = '\0';
+            }
+        } else {
+            if (bytes_read == -1 && errno != EAGAIN) {
+                // Error reading
+                rocblas_log[0] = '\0';
+            } else {
+                // No data or EAGAIN
+                rocblas_log[0] = '\0';
+            }
+        }
+    }
+            // Write to log file if enabled
+            if (rocblas_log_file && rocblas_log[0] != '\0') {
+                fprintf(rocblas_log_file, "%s\n", rocblas_log);
+                fflush(rocblas_log_file);
+            }
+
+            // Write to CSV output with # prefix
+            if (rocblas_log[0] != '\0') {
+                // Split by newline and print each line with # prefix
+                std::stringstream ss(rocblas_log);
+                std::string line;
+                while (std::getline(ss, line)) {
+                    TRACE_PRINTF("# %s\n", line.c_str());
+                }
+            }
+
             TRACE_PRINTF("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
                    kernel_name.c_str(),
                    (unsigned long)record.thread_id,
@@ -330,6 +390,17 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
                 TRACE_PRINTF("  Start Timestamp: %lu ns\n", (unsigned long)dispatch_data->start_timestamp);
                 TRACE_PRINTF("  End Timestamp: %lu ns\n", (unsigned long)dispatch_data->end_timestamp);
                 TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
+                
+                // Read from RocBLAS pipe if available (also for human readable)
+                char rocblas_log[512] = {0};
+                if (rocblas_pipe_fd != -1) {
+                    ssize_t n = read(rocblas_pipe_fd, rocblas_log, sizeof(rocblas_log) - 1);
+                    if (n > 0) {
+                        rocblas_log[n] = '\0';
+                        if (rocblas_log[n-1] == '\n') rocblas_log[n-1] = '\0';
+                        TRACE_PRINTF("  RocBLAS Log: %s\n", rocblas_log);
+                    }
+                }
             }
         }
     }
@@ -779,6 +850,56 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
             fprintf(stdout, "[Kernel Tracer] Output redirected to: %s\n", output_filename);
         }
     }
+
+    // Handle RocBLAS Log Pipe
+    if (rpv3_rocblas_pipe) {
+        // Verify against ROCBLAS_LOG_TRACE or ROCBLAS_LOG_TRACE_PATH environment variable
+        const char* env_pipe = getenv("ROCBLAS_LOG_TRACE");
+        if (!env_pipe) {
+            env_pipe = getenv("ROCBLAS_LOG_TRACE_PATH");
+        }
+        
+        if (!env_pipe) {
+            fprintf(stderr, "[Kernel Tracer] Warning: --rocblas specified '%s' but ROCBLAS_LOG_TRACE/ROCBLAS_LOG_TRACE_PATH is not set.\n", rpv3_rocblas_pipe);
+            fprintf(stderr, "[Kernel Tracer] RocBLAS will not write to the pipe. Logging disabled.\n");
+        } else if (strcmp(rpv3_rocblas_pipe, env_pipe) != 0) {
+            fprintf(stderr, "[Kernel Tracer] Error: --rocblas '%s' does not match ROCBLAS_LOG_TRACE/PATH '%s'.\n", 
+                    rpv3_rocblas_pipe, env_pipe);
+            fprintf(stderr, "[Kernel Tracer] Logging disabled to prevent mismatch.\n");
+        } else {
+            // Check if it's a FIFO
+            struct stat st;
+            if (stat(rpv3_rocblas_pipe, &st) == 0 && S_ISFIFO(st.st_mode)) {
+                STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS pipe: %s\n", rpv3_rocblas_pipe);
+                
+                // Open non-blocking
+                rocblas_pipe_fd = open(rpv3_rocblas_pipe, O_RDONLY | O_NONBLOCK);
+                if (rocblas_pipe_fd != -1) {
+                    strncpy(rocblas_pipe_path, rpv3_rocblas_pipe, sizeof(rocblas_pipe_path) - 1);
+                    STATUS_PRINTF("[Kernel Tracer] Successfully opened RocBLAS log pipe\n");
+                } else {
+                    fprintf(stderr, "[Kernel Tracer] Failed to open RocBLAS log pipe: %s\n", strerror(errno));
+                }
+            } else {
+                STATUS_PRINTF("[Kernel Tracer] Pipe '%s' is not a FIFO or not found.\n", rpv3_rocblas_pipe);
+            }
+        }
+    }
+
+    // Handle RocBLAS Log File
+    if (rpv3_rocblas_log_file) {
+        if (!rpv3_rocblas_pipe) {
+            fprintf(stderr, "[Kernel Tracer] Warning: --rocblas-log specified but --rocblas is missing. Ignoring.\n");
+        } else {
+            rocblas_log_file = fopen(rpv3_rocblas_log_file, "w");
+            if (!rocblas_log_file) {
+                fprintf(stderr, "[Kernel Tracer] Warning: Could not open rocBLAS log file '%s': %s\n", 
+                        rpv3_rocblas_log_file, strerror(errno));
+            } else {
+                STATUS_PRINTF("[Kernel Tracer] Redirecting RocBLAS logs to: %s\n", rpv3_rocblas_log_file);
+            }
+        }
+    }
     
     // Check if counter mode is enabled
     counter_mode = rpv3_counter_mode;
@@ -840,6 +961,20 @@ void tool_fini(void* tool_data) {
     (void) tool_data;
     
     STATUS_PRINTF("\n[Kernel Tracer] Finalizing profiler tool...\n");
+    
+    if (rocblas_pipe_fd != -1) {
+        close(rocblas_pipe_fd);
+        rocblas_pipe_fd = -1;
+    }
+
+    if (rocblas_log_file) {
+        fclose(rocblas_log_file);
+        rocblas_log_file = NULL;
+    }
+
+    if (output_file && output_file != stdout) {
+        fclose(output_file);
+    }
     
     // Flush buffer if in timeline mode
     if (timeline_enabled && trace_buffer.handle != 0) {

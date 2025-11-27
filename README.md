@@ -14,11 +14,13 @@ A sample shared library that demonstrates using the **rocprofv3** (ROCm Profiler
   - [Timeline Support](#timeline-support)
   - [CSV Output Support](#csv-output-support)
   - [Counter Collection](#counter-collection)
+  - [RocBLAS Logging](#rocblas-logging)
 - [Example Output](#example-output)
   - [Basic Output](#basic-output)
   - [Timeline Mode](#timeline-mode-output)
   - [CSV Output](#csv-output-example)
   - [Counter Collection Output](#counter-collection-output)
+  - [RocBLAS Logging Output](#rocblas-logging-output)
 - [Testing](#testing)
 - [Advanced Topics](#advanced-topics)
   - [How It Works](#how-it-works)
@@ -100,6 +102,8 @@ The profiler supports configuration via the `RPV3_OPTIONS` environment variable.
 - `--output <file>` - Redirect output to the specified file
 - `--outputdir <dir>` - Redirect output to the specified directory using PID-based filenames
 - `--counter <group>` - Enable counter collection. Groups: `compute`, `memory`, `mixed`
+- `--rocblas <pipe>` - Enable rocBLAS logging via named pipe
+- `--rocblas-log <file>` - Redirect rocBLAS logs to the specified file (requires `--rocblas`)
 
 **Examples:**
 
@@ -208,6 +212,30 @@ RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
 **Note**: Counter collection requires hardware support. If the GPU does not support the requested counters, the feature will be gracefully disabled with a warning.
 
+### RocBLAS Logging
+
+To enable rocBLAS logging, you must configure both rocBLAS and the tracer to use the same named pipe.
+
+1.  **Create a named pipe** (FIFO).
+2.  **Configure rocBLAS** to write trace logs to this pipe. For Layer 1 (Trace logging), use `ROCBLAS_LOG_TRACE_PATH`.
+3.  **Configure the tracer** to read from this pipe by passing the `--rocblas <pipe_path>` option.
+
+**Usage:**
+```bash
+# 1. Create a named pipe
+mkfifo rocblas_log_pipe
+
+# 2. Configure rocBLAS (Layer 1 = Trace logging)
+export ROCBLAS_LAYER=1
+export ROCBLAS_LOG_TRACE_PATH=rocblas_log_pipe
+
+# 3. Run with tracer configured to read from the same pipe
+RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
+
+# Optional: Redirect rocBLAS logs to a separate file while also including them in the trace
+RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe --rocblas-log rocblas.log" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
+```
+
 ---
 
 ## Example Output
@@ -217,7 +245,7 @@ RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring RPV3 v1.3.2 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.0 (Runtime: v1.0.0, Priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -257,7 +285,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring RPV3 v1.3.2 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.0 (Runtime: v1.0.0, Priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)
@@ -311,6 +339,17 @@ With `--counter mixed` option:
 [Counters] Dispatch ID: 1, Value: 1048576.000000
 [Counters] Dispatch ID: 1, Value: 256.000000
 ...
+```
+
+### RocBLAS Logging Output
+
+With `--rocblas` option enabled:
+
+```csv
+KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg,StartTimestamp,EndTimestamp,DurationNs,DurationUs,TimeSinceStartMs
+# rocblas_create_handle,atomics_not_allowed
+# rocblas_sgemm,N,N,1024,1024,1024,1,0x7f02a3800000,1024,0x7f02a3200000,1024,0,0x7f02a2c00000,1024,atomics_not_allowed
+"Cijk_Ailk_Bljk_SB_MT32x32x8_SN_1LDSB0_APM1_ABV0_ACED0_AF0EM1_AF1EM1_AMAS0_ASE_ASGT_ASLT_ASM_ASAE01_ASCE01_ASEM1_AAC0_BL1_BS1_CLR0_DTLA0_DTLB0_DTVA0_DTVB0_DVO0_ETSP_EPS0_ELFLR0_EMLL0_FSSC10_FL0_GLVWA1_GLVWB1_GRCGA1_GRCGB1_GRPM1_GRVW1_GSU1_GSUASB_GLS0_ISA1151_IU1_K1_KLA_LBSPPA0_LBSPPB0_LPA0_LPB0_LDL1_LRVW1_LWPMn1_LDW0_FMA_MIAV0_MDA2_MO40_MMFGLC_MKFGSU256_NTA0_NTB0_NTC0_NTD0_NEPBS0_NLCA1_NLCB1_ONLL1_OPLV0_PK0_PAP0_PGR0_PLR1_PKA0_SIA1_SLW1_SS0_SU32_SUM0_SUS256_SCIUI1_SPO0_SRVW0_SSO0_SVW4_SNLL0_TSGRA0_TSGRB0_TT2_2_TLDS0_UMLDSA0_UMLDSB0_U64SL1_USFGROn1_VAW1_VSn1_VW1_VWB1_VFLRP0_WSGRA0_WSGRB0_WS64_WG16_16_1_WGM8",9407,1,245,1,8192,32,1,256,1,1,0,2048,0,0,0,0.000,0.000
 ```
 
 ---

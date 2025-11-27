@@ -12,10 +12,11 @@ extern "C" {
 
 /* Version information */
 /* Version information */
-#define RPV3_VERSION "1.3.2"
+/* Version information */
+#define RPV3_VERSION "1.4.0"
 #define RPV3_VERSION_MAJOR 1
-#define RPV3_VERSION_MINOR 3
-#define RPV3_VERSION_PATCH 2
+#define RPV3_VERSION_MINOR 4
+#define RPV3_VERSION_PATCH 0
 
 
 /* Return codes */
@@ -44,6 +45,12 @@ extern char* rpv3_output_file;
 
 /* Global output directory path (set by --outputdir option) */
 extern char* rpv3_output_dir;
+
+/* Global rocBLAS log pipe path (set by --rocblas option) */
+extern char* rpv3_rocblas_pipe;
+
+/* Global rocBLAS log file path (set by --rocblas-log option) */
+extern char* rpv3_rocblas_log_file;
 
 /**
  * Parse options from the RPV3_OPTIONS environment variable

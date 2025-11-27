@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+
+## [1.4.0] - 2025-11-27
+### Added
+- **RocBLAS Logging Control**: New `--rocblas <pipe>` option to integrate rocBLAS logs into the trace output.
+- **RocBLAS Log Redirection**: New `--rocblas-log <file>` option to redirect captured logs to a separate file.
+- **RocBLAS Layer 1 Support**: Support for `ROCBLAS_LAYER=1` using `ROCBLAS_LOG_TRACE_PATH`.
+- **CSV Output Enhancement**: RocBLAS logs are now included in CSV output as `#` prefixed lines.
+
 ## [1.3.2] - 2025-11-26
 ### Changed
 - Refined output redirection: Status messages now go to stdout when CSV output is redirected to a file.

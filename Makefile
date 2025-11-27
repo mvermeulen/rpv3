@@ -18,13 +18,14 @@ ROCPROF_LIB = $(ROCM_PATH)/lib
 PLUGIN_CPP = libkernel_tracer.so
 PLUGIN_C = libkernel_tracer_c.so
 EXAMPLE = example_app
+EXAMPLE_ROCBLAS = example_rocblas
 OPTIONS_OBJ = rpv3_options.o
 UTILS_DIR = utils
 UTILS_BIN = $(UTILS_DIR)/check_status $(UTILS_DIR)/diagnose_counters
 
 .PHONY: all clean utils
 
-all: $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE)
+all: $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE) $(EXAMPLE_ROCBLAS)
 
 # Build utilities
 utils: $(UTILS_BIN)
@@ -70,8 +71,16 @@ $(EXAMPLE): example_app.cpp
 	$(HIPCC) --std=c++17 -O2 \
 		-o $@ $<
 
+# Build the rocBLAS example application
+$(EXAMPLE_ROCBLAS): example_rocblas.cpp
+	$(HIPCC) --std=c++17 -O2 \
+		-I$(ROCM_PATH)/include \
+		-L$(ROCM_PATH)/lib \
+		-lrocblas \
+		-o $@ $<
+
 clean:
-	rm -f $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE) $(OPTIONS_OBJ) $(UTILS_BIN)
+	rm -f $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE) $(EXAMPLE_ROCBLAS) $(OPTIONS_OBJ) $(UTILS_BIN)
 
 # Usage instructions
 help:
