@@ -38,6 +38,7 @@ This project consists of:
 - **`libkernel_tracer.so`** - A profiler plugin library (C++ implementation)
 - **`libkernel_tracer_c.so`** - A profiler plugin library (C implementation)
 - **`example_app`** - A sample HIP application with multiple kernels to demonstrate tracing
+- **`example_rocblas`** - A sample RocBLAS application to demonstrate tracing library calls
 
 Both profiler libraries provide identical functionality - use whichever fits your project's language requirements.
 
@@ -66,6 +67,7 @@ This will produce:
 - `libkernel_tracer.so` - The profiler plugin (C++ version)
 - `libkernel_tracer_c.so` - The profiler plugin (C version)
 - `example_app` - The example application
+- `example_rocblas` - The RocBLAS example application (if RocBLAS is found)
 
 ### Quick Start
 
@@ -83,6 +85,9 @@ RPV3_OPTIONS="--csv" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
 # With counter collection
 RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# With RocBLAS application
+RPV3_OPTIONS="--csv" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
 ```
 
 ---
