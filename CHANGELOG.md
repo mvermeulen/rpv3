@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.4.2] - 2025-11-27
+### Added
+- `debug` target to `Makefile` for building with debug symbols (`-g -O0`).
+
+### Changed
+- Bumped version to 1.4.2.
+- Updated README example output to reflect current version.
+
 ## [1.4.1] - 2025-11-27
 ### Changed
 - Refactored RocBLAS pipe support to remove background thread and implement synchronous reading for Tensile kernels only.

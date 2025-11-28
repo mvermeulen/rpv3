@@ -27,6 +27,11 @@ UTILS_BIN = $(UTILS_DIR)/check_status $(UTILS_DIR)/diagnose_counters
 
 all: $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE) $(EXAMPLE_ROCBLAS)
 
+# Debug build
+debug: CXXFLAGS = -std=c++17 -fPIC -Wall -g -O0
+debug: CFLAGS = -std=c11 -fPIC -Wall -g -O0
+debug: all
+
 # Build utilities
 utils: $(UTILS_BIN)
 
@@ -90,6 +95,7 @@ help:
 	@echo ""
 	@echo "Targets:"
 	@echo "  make all     - Build both plugin and example (default)"
+	@echo "  make debug   - Build with debug symbols (-g -O0)"
 	@echo "  make clean   - Remove built files"
 	@echo "  make utils   - Build utility tools"
 	@echo "  make test    - Run all tests"
