@@ -992,23 +992,38 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
 
     /* Handle RocBLAS Log Pipe */
     if (rpv3_rocblas_pipe) {
+        /* Check if it's a FIFO or regular file first */
+        struct stat st;
+        int is_reg_file = 0;
+        int is_fifo = 0;
+        
+        if (stat(rpv3_rocblas_pipe, &st) == 0) {
+            if (S_ISREG(st.st_mode)) is_reg_file = 1;
+            if (S_ISFIFO(st.st_mode)) is_fifo = 1;
+        }
+
         /* Verify against ROCBLAS_LOG_TRACE or ROCBLAS_LOG_TRACE_PATH environment variable */
-        const char* env_pipe = getenv("ROCBLAS_LOG_TRACE");
-        if (!env_pipe) {
-            env_pipe = getenv("ROCBLAS_LOG_TRACE_PATH");
+        /* Only enforce this check if it is NOT a regular file (i.e. it is a pipe or we don't know yet) */
+        if (!is_reg_file) {
+            const char* env_pipe = getenv("ROCBLAS_LOG_TRACE");
+            if (!env_pipe) {
+                env_pipe = getenv("ROCBLAS_LOG_TRACE_PATH");
+            }
+            
+            if (!env_pipe) {
+                fprintf(stderr, "[Kernel Tracer] Warning: --rocblas specified '%s' but ROCBLAS_LOG_TRACE/ROCBLAS_LOG_TRACE_PATH is not set.\n", rpv3_rocblas_pipe);
+                fprintf(stderr, "[Kernel Tracer] RocBLAS will not write to the pipe. Logging disabled.\n");
+                rpv3_rocblas_pipe = NULL; /* Disable logging */
+            } else if (strcmp(rpv3_rocblas_pipe, env_pipe) != 0) {
+                fprintf(stderr, "[Kernel Tracer] Error: --rocblas '%s' does not match ROCBLAS_LOG_TRACE/PATH '%s'.\n", 
+                        rpv3_rocblas_pipe, env_pipe);
+                fprintf(stderr, "[Kernel Tracer] Logging disabled to prevent mismatch.\n");
+                rpv3_rocblas_pipe = NULL; /* Disable logging */
+            }
         }
         
-        if (!env_pipe) {
-            fprintf(stderr, "[Kernel Tracer] Warning: --rocblas specified '%s' but ROCBLAS_LOG_TRACE/ROCBLAS_LOG_TRACE_PATH is not set.\n", rpv3_rocblas_pipe);
-            fprintf(stderr, "[Kernel Tracer] RocBLAS will not write to the pipe. Logging disabled.\n");
-        } else if (strcmp(rpv3_rocblas_pipe, env_pipe) != 0) {
-            fprintf(stderr, "[Kernel Tracer] Error: --rocblas '%s' does not match ROCBLAS_LOG_TRACE/PATH '%s'.\n", 
-                    rpv3_rocblas_pipe, env_pipe);
-            fprintf(stderr, "[Kernel Tracer] Logging disabled to prevent mismatch.\n");
-        } else {
-            /* Check if it's a FIFO or regular file */
-            struct stat st;
-            if (stat(rpv3_rocblas_pipe, &st) == 0 && (S_ISFIFO(st.st_mode) || S_ISREG(st.st_mode))) {
+        if (rpv3_rocblas_pipe) {
+            if (is_fifo || is_reg_file) {
                 STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS log file/pipe: %s\n", rpv3_rocblas_pipe);
                 
                 /* Open non-blocking */
