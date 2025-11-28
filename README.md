@@ -223,23 +223,29 @@ RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
 To enable rocBLAS logging, you can use either a **regular file** or a **named pipe**.
 
 **Option 1: Regular File (Recommended for Timeline Mode)**
-Simply point `--rocblas` to a file path. The tracer will read from this file.
+This is a two-step process: first capture the RocBLAS logs to a file, then run the tracer using that log file.
+
+1.  **Run your application** with RocBLAS logging enabled to generate the log file.
+2.  **Run the tracer** pointing to the generated log file.
 
 ```bash
-# Configure rocBLAS to write to a file
+# Step 1: Generate the RocBLAS log file
 export ROCBLAS_LAYER=1
 export ROCBLAS_LOG_TRACE_PATH=rocblas.log
+./example_rocblas
 
-# Run with tracer reading from the same file
+# Step 2: Run with tracer reading from the generated file
+# Note: Disable ROCBLAS_LAYER to avoid overwriting the log file while reading it
+unset ROCBLAS_LAYER
 RPV3_OPTIONS="--csv --rocblas rocblas.log" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
 ```
 
 **Option 2: Named Pipe (FIFO)**
-Useful for streaming logs without storing them on disk. **Note:** Named pipes are NOT supported in Timeline Mode.
+This option runs both steps from Option 1 together: generating the RocBLAS trace and reading it using a single run of the application. This is useful for streaming logs without storing them on disk. **Note:** Named pipes are NOT supported in Timeline Mode.
 
 1.  **Create a named pipe** (FIFO).
 2.  **Configure rocBLAS** to write trace logs to this pipe.
-3.  **Configure the tracer** to read from this pipe.
+3.  **Run the application with the tracer** configured to read from this pipe.
 
 ```bash
 # 1. Create a named pipe
