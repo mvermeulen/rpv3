@@ -4,6 +4,7 @@ build/
 *.o
 *.a
 example_app
+example_rocblas
 
 # CMake
 CMakeCache.txt
