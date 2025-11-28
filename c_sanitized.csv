@@ -1,0 +1,4 @@
+ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,WorkgroupX,WorkgroupY,WorkgroupZ,PrivateSeg,GroupSeg
+18294,1,18,1,1048576,1,1,256,1,1,0,0
+18294,2,17,2,1048576,1,1,256,1,1,0,0
+18294,3,16,3,512,512,1,16,16,1,0,0
