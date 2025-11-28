@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.5.0] - 2025-11-27
+
+### Added
+- **CSV Summary Tool**: New `utils/summarize_trace.py` to analyze CSV trace output
+  - Groups kernels by name and M, N, K dimensions (extracted from RocBLAS logs)
+  - Calculates count, total time, average time, and percentage of total time
+  - Outputs sorted table by total time descending
+  - Test suite in `tests/test_csv_summary.py`
+
 ## [1.4.5] - 2025-11-27
 
 ### Added

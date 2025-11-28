@@ -204,6 +204,28 @@ df = pd.read_csv('kernels.csv')
 # Import into Excel, Google Sheets, LibreOffice Calc, etc.
 ```
 
+**Analyzing CSV Output:**
+
+The `utils/summarize_trace.py` tool provides quick analysis of CSV trace files:
+
+```bash
+# Summarize a trace file
+python3 utils/summarize_trace.py kernels.csv
+```
+
+Output example:
+```
+Kernel Name                                                                                                         |    Count | Total Time (ms) |   Avg Time (us) |  % Total
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Cijk_Ailk_Bljk_SB_MT32x32x8_SN_1LDSB0_APM1_ABV0_ACED0_AF0EM1_AF1EM1_AMAS0_ASE... [M=1024, N=1024, K=1024]           |        1 |           0.000 |           0.000 |     0.0%
+```
+
+Features:
+- Groups kernels by name and M, N, K dimensions (from RocBLAS logs)
+- Calculates count, total time, average time, and percentage
+- Sorts by total time descending
+
+
 ### Counter Collection
 
 Collect per-kernel performance counters to diagnose performance bottlenecks (compute-bound vs. memory-bound).
@@ -275,7 +297,7 @@ RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe" LD_PRELOAD=./libkernel_tracer.so
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring RPV3 v1.4.5 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.5.0 (Runtime: v1.0.0, Priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -315,7 +337,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring RPV3 v1.4.5 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.5.0 (Runtime: v1.0.0, Priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)
@@ -607,6 +629,7 @@ rpv3/
 │   ├── test_rocblas_multistep.sh # Test for RocBLAS multi-step workflow
 │   ├── test_errors.sh         # Test for error handling
 │   ├── test_parity.sh         # Test for C vs C++ parity
+│   ├── test_csv_summary.py    # Test for CSV summary tool
 │   ├── run_tests.sh           # Master test runner
 │   ├── test_utils.sh          # Shared test utilities
 │   └── README.md              # Testing documentation
@@ -614,6 +637,7 @@ rpv3/
 │   ├── diagnose_counters.cpp  # Tool to list supported counters
 │   ├── check_status.cpp       # Tool to decode status codes
 │   ├── check_requirements.sh  # Tool to check system requirements
+│   ├── summarize_trace.py     # Tool to summarize CSV trace output
 │   └── README.md              # Utilities documentation
 ├── Makefile                   # Make-based build system
 ├── CMakeLists.txt             # CMake-based build system
