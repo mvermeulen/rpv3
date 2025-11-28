@@ -54,6 +54,25 @@ uint64_t count = atomic_fetch_add(&kernel_count, 1) + 1;
 atomic_load(&kernel_count)
 ```
 
+uint64_t count = atomic_fetch_add(&kernel_count, 1) + 1;
+// ...
+atomic_load(&kernel_count)
+```
+
+### Implementation Details
+
+While functionality is identical, internal implementation differs:
+
+| Feature | C++ Version | C Version |
+|---------|-------------|-----------|
+| **Kernel Names** | Demangled using `abi::__cxa_demangle` (e.g., `vectorAdd`) | Mangled (raw symbol, e.g., `_Z9vectorAdd...`) |
+| **Storage** | `std::unordered_map` (dynamic, O(1) lookup) | Fixed-size array (256 entries, linear search) |
+| **Strings** | `std::string` | `char` arrays with `strncpy` |
+| **Options Parsing** | Shared `rpv3_options.c` (linked object) | Shared `rpv3_options.c` (linked object) |
+| **RocBLAS Logs** | Single-line read with `read()` loop | Single-line read with `read()` loop |
+
+**Note:** The C version's fixed-size array for kernel names is a simplification for this example. Production C code might use a hash table library (e.g., `uthash`) for better scalability.
+
 ## Which Version to Use?
 
 ### Use the C++ version if:
