@@ -35,6 +35,99 @@
 #include <chrono>
 
 #include "rpv3_options.h"
+#include <dlfcn.h>
+
+extern "C" {
+    // Intercept fopen to force line buffering on pipes
+    typedef FILE* (*fopen_t)(const char*, const char*);
+    static fopen_t real_fopen = nullptr;
+    static fopen_t real_fopen64 = nullptr;
+
+    FILE* fopen(const char* path, const char* mode) {
+        if (!real_fopen) {
+            real_fopen = (fopen_t)dlsym(RTLD_NEXT, "fopen");
+        }
+        FILE* fp = real_fopen(path, mode);
+        
+        // Check against environment variables directly to handle early initialization
+        const char* trace_path = getenv("ROCBLAS_LOG_TRACE_PATH");
+        const char* bench_path = getenv("ROCBLAS_LOG_BENCH_PATH");
+        const char* profile_path = getenv("ROCBLAS_LOG_PROFILE_PATH");
+        
+        bool match = false;
+        if (path) {
+            if (trace_path && strcmp(path, trace_path) == 0) match = true;
+            else if (bench_path && strcmp(path, bench_path) == 0) match = true;
+            else if (profile_path && strcmp(path, profile_path) == 0) match = true;
+            else if (rpv3_rocblas_pipe && strcmp(path, rpv3_rocblas_pipe) == 0) match = true;
+        }
+
+        if (fp && match) {
+             setvbuf(fp, nullptr, _IONBF, 0);
+        }
+        return fp;
+    }
+
+    FILE* fopen64(const char* path, const char* mode) {
+        if (!real_fopen64) {
+            real_fopen64 = (fopen_t)dlsym(RTLD_NEXT, "fopen64");
+            if (!real_fopen64) real_fopen64 = (fopen_t)dlsym(RTLD_NEXT, "fopen");
+        }
+        FILE* fp = real_fopen64(path, mode);
+        
+        const char* trace_path = getenv("ROCBLAS_LOG_TRACE_PATH");
+        const char* bench_path = getenv("ROCBLAS_LOG_BENCH_PATH");
+        const char* profile_path = getenv("ROCBLAS_LOG_PROFILE_PATH");
+        
+        bool match = false;
+        if (path) {
+            if (trace_path && strcmp(path, trace_path) == 0) match = true;
+            else if (bench_path && strcmp(path, bench_path) == 0) match = true;
+            else if (profile_path && strcmp(path, profile_path) == 0) match = true;
+            else if (rpv3_rocblas_pipe && strcmp(path, rpv3_rocblas_pipe) == 0) match = true;
+        }
+        
+        if (fp && match) {
+             setvbuf(fp, nullptr, _IONBF, 0);
+        }
+        return fp;
+    }
+
+    typedef FILE* (*fdopen_t)(int, const char*);
+    static fdopen_t real_fdopen = nullptr;
+
+    FILE* fdopen(int fd, const char* mode) {
+        if (!real_fdopen) {
+            real_fdopen = (fdopen_t)dlsym(RTLD_NEXT, "fdopen");
+        }
+        FILE* fp = real_fdopen(fd, mode);
+        
+        if (fp) {
+            char path[1024];
+            char proc_path[64];
+            snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", fd);
+            ssize_t len = readlink(proc_path, path, sizeof(path) - 1);
+            if (len != -1) {
+                path[len] = '\0';
+                
+                const char* trace_path = getenv("ROCBLAS_LOG_TRACE_PATH");
+                const char* bench_path = getenv("ROCBLAS_LOG_BENCH_PATH");
+                const char* profile_path = getenv("ROCBLAS_LOG_PROFILE_PATH");
+                
+                bool match = false;
+                if (trace_path && strcmp(path, trace_path) == 0) match = true;
+                else if (bench_path && strcmp(path, bench_path) == 0) match = true;
+                else if (profile_path && strcmp(path, profile_path) == 0) match = true;
+                else if (rpv3_rocblas_pipe && strcmp(path, rpv3_rocblas_pipe) == 0) match = true;
+                
+        if (fp && match) {
+             setvbuf(fp, nullptr, _IONBF, 0);
+        }
+        }
+            }
+        return fp;
+    }
+}
 
 namespace {
     std::atomic<uint64_t> kernel_count{0};
@@ -374,8 +467,8 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             pfd.fd = rocblas_pipe_fd;
             pfd.events = POLLIN;
             
-            // Wait up to 100ms for data
-            int ret = poll(&pfd, 1, 100);
+            // Wait up to 500ms for data
+            int ret = poll(&pfd, 1, 500);
             
             if (ret > 0 && (pfd.revents & POLLIN)) {
                 char buffer[4096];

@@ -7,7 +7,7 @@ CC = gcc
 HIPCC = hipcc
 CXXFLAGS = -std=c++17 -fPIC -Wall -O2
 CFLAGS = -std=c11 -fPIC -Wall -O2
-LDFLAGS = -shared
+LDFLAGS = -shared -ldl
 
 # ROCm paths (adjust if needed)
 ROCM_PATH ?= /opt/rocm
