@@ -81,7 +81,8 @@ $(EXAMPLE_ROCBLAS): example_rocblas.cpp
 
 clean:
 	rm -f $(PLUGIN_CPP) $(PLUGIN_C) $(EXAMPLE) $(EXAMPLE_ROCBLAS) $(OPTIONS_OBJ) $(UTILS_BIN)
-	rm -f *.txt *.log *.csv rocblas_log_pipe
+	rm -f *.log *.csv rocblas_log_pipe
+	find . -maxdepth 1 -name "*.txt" ! -name "CMakeLists.txt" -delete
 
 # Usage instructions
 help:
