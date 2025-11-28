@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.4.4] - 2025-11-27
+### Changed
+- Relaxed RocBLAS environment variable checks: Regular files no longer require matching `ROCBLAS_LOG_TRACE` environment variable.
+- Improved RocBLAS log reading: Now reads single lines per kernel dispatch and filters out internal API calls (`create_handle`, `destroy_handle`, `set_stream`).
+- Timeline mode now supports RocBLAS logging from regular files.
+- Explicitly disallowed RocBLAS logging with named pipes in timeline mode to prevent blocking.
+
 ## [1.4.3] - 2025-11-27
 - Fixed RocBLAS logging issue by intercepting file opening functions to force no buffering.
 - Added support for reading RocBLAS logs from regular files.

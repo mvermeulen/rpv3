@@ -220,27 +220,40 @@ RPV3_OPTIONS="--counter mixed" LD_PRELOAD=./libkernel_tracer.so ./example_app
 
 ### RocBLAS Logging
 
-To enable rocBLAS logging, you must configure both rocBLAS and the tracer to use the same named pipe.
+To enable rocBLAS logging, you can use either a **regular file** or a **named pipe**.
+
+**Option 1: Regular File (Recommended for Timeline Mode)**
+Simply point `--rocblas` to a file path. The tracer will read from this file.
+
+```bash
+# Configure rocBLAS to write to a file
+export ROCBLAS_LAYER=1
+export ROCBLAS_LOG_TRACE_PATH=rocblas.log
+
+# Run with tracer reading from the same file
+RPV3_OPTIONS="--csv --rocblas rocblas.log" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
+```
+
+**Option 2: Named Pipe (FIFO)**
+Useful for streaming logs without storing them on disk. **Note:** Named pipes are NOT supported in Timeline Mode.
 
 1.  **Create a named pipe** (FIFO).
-2.  **Configure rocBLAS** to write trace logs to this pipe. For Layer 1 (Trace logging), use `ROCBLAS_LOG_TRACE_PATH`.
-3.  **Configure the tracer** to read from this pipe by passing the `--rocblas <pipe_path>` option.
+2.  **Configure rocBLAS** to write trace logs to this pipe.
+3.  **Configure the tracer** to read from this pipe.
 
-**Usage:**
 ```bash
 # 1. Create a named pipe
 mkfifo rocblas_log_pipe
 
-# 2. Configure rocBLAS (Layer 1 = Trace logging)
+# 2. Configure rocBLAS
 export ROCBLAS_LAYER=1
 export ROCBLAS_LOG_TRACE_PATH=rocblas_log_pipe
 
-# 3. Run with tracer configured to read from the same pipe
+# 3. Run with tracer
 RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
-
-# Optional: Redirect rocBLAS logs to a separate file while also including them in the trace
-RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe --rocblas-log rocblas.log" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
 ```
+
+**Note:** The tracer filters out internal API calls (`rocblas_create_handle`, `rocblas_destroy_handle`, `rocblas_set_stream`) to keep the trace clean.
 
 ---
 
@@ -251,7 +264,7 @@ RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe --rocblas-log rocblas.log" LD_PRE
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring RPV3 v1.4.3 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.4 (Runtime: v1.0.0, Priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -291,7 +304,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring RPV3 v1.4.3 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.4 (Runtime: v1.0.0, Priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)
@@ -577,6 +590,9 @@ rpv3/
 │   ├── test_csv_output.sh     # CSV output tests
 │   ├── test_output_options.sh # Output options tests
 │   ├── test_readme_examples.py # README example verification script
+│   ├── test_rocblas_file_relaxed.sh # Test for relaxed RocBLAS file checks
+│   ├── test_rocblas_filter.sh # Test for RocBLAS log filtering
+│   ├── test_rocblas_timeline.sh # Test for RocBLAS timeline support
 │   ├── run_tests.sh           # Master test runner
 │   ├── test_utils.sh          # Shared test utilities
 │   └── README.md              # Testing documentation

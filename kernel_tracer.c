@@ -357,6 +357,65 @@ void timeline_buffer_callback(
                 TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
                 TRACE_PRINTF("  Time Since Start: %.3f ms\n", time_since_start_ms);
             }
+
+            /* Read from RocBLAS log if available and kernel matches pattern */
+            /* In timeline mode, we only support reading from files, not pipes */
+            if (rocblas_pipe_fd != -1 && is_tensile_kernel(kernel_name)) {
+                char line_buffer[4096];
+                int line_pos = 0;
+                int valid_line_found = 0;
+                
+                /* Read char-by-char to handle filtering and stop after one valid line */
+                while (!valid_line_found) {
+                    char c;
+                    ssize_t bytes_read = read(rocblas_pipe_fd, &c, 1);
+                    
+                    if (bytes_read > 0) {
+                        /* Write to log file if enabled (raw stream) */
+                        if (rocblas_log_file) {
+                            fputc(c, rocblas_log_file);
+                        }
+                        
+                        if (c == '\n') {
+                            line_buffer[line_pos] = '\0';
+                            
+                            /* Clean up carriage return if present */
+                            if (line_pos > 0 && line_buffer[line_pos-1] == '\r') {
+                                line_buffer[line_pos-1] = '\0';
+                            }
+                            
+                            /* Check filters */
+                            if (strstr(line_buffer, "rocblas_create_handle") != NULL || 
+                                strstr(line_buffer, "rocblas_destroy_handle") != NULL ||
+                                strstr(line_buffer, "rocblas_set_stream") != NULL) {
+                                /* Skip this line, reset buffer and continue reading */
+                                line_pos = 0;
+                            } else {
+                                /* Valid line found */
+                                if (strlen(line_buffer) > 0) {
+                                    TRACE_PRINTF("# %s\n", line_buffer);
+                                    valid_line_found = 1; /* Stop reading */
+                                } else {
+                                    /* Empty line, just reset */
+                                    line_pos = 0;
+                                }
+                            }
+                        } else {
+                            if (line_pos < sizeof(line_buffer) - 1) {
+                                line_buffer[line_pos++] = c;
+                            }
+                            /* Else: line too long, truncate */
+                        }
+                    } else {
+                        /* EOF or error */
+                        break;
+                    }
+                }
+                
+                if (rocblas_log_file) {
+                    fflush(rocblas_log_file);
+                }
+            }
         }
     }
 }
@@ -467,47 +526,58 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             int ret = poll(&pfd, 1, 500);
             
             if (ret > 0 && (pfd.revents & POLLIN)) {
-                char buffer[4096];
-                int data_read = 0;
+                char line_buffer[4096];
+                int line_pos = 0;
+                int valid_line_found = 0;
                 
-                /* Drain the pipe */
-                while (1) {
-                    ssize_t bytes_read = read(rocblas_pipe_fd, buffer, sizeof(buffer) - 1);
+                /* Read char-by-char to handle pipe correctly and stop after one valid line */
+                while (!valid_line_found) {
+                    char c;
+                    ssize_t bytes_read = read(rocblas_pipe_fd, &c, 1);
+                    
                     if (bytes_read > 0) {
-                        buffer[bytes_read] = '\0';
-                        data_read = 1;
-                        
-                        /* Write to log file if enabled */
+                        /* Write to log file if enabled (raw stream) */
                         if (rocblas_log_file) {
-                            fprintf(rocblas_log_file, "%s", buffer);
+                            fputc(c, rocblas_log_file);
                         }
-
-                        /* Process lines for trace output */
-                        char* line = strtok(buffer, "\n");
-                        while (line != NULL) {
-                            /* Filter out create/destroy handle messages */
-                            if (strstr(line, "create_handle") == NULL && 
-                                strstr(line, "destroy_handle") == NULL) {
-                                
-                                /* Clean up carriage returns if present */
-                                size_t len = strlen(line);
-                                if (len > 0 && line[len-1] == '\r') {
-                                    line[len-1] = '\0';
-                                }
-                                
-                                if (strlen(line) > 0) {
-                                    TRACE_PRINTF("# %s\n", line);
+                        
+                        if (c == '\n') {
+                            line_buffer[line_pos] = '\0';
+                            
+                            /* Clean up carriage return if present */
+                            if (line_pos > 0 && line_buffer[line_pos-1] == '\r') {
+                                line_buffer[line_pos-1] = '\0';
+                            }
+                            
+                            /* Check filters */
+                            if (strstr(line_buffer, "rocblas_create_handle") != NULL || 
+                                strstr(line_buffer, "rocblas_destroy_handle") != NULL ||
+                                strstr(line_buffer, "rocblas_set_stream") != NULL) {
+                                /* Skip this line, reset buffer and continue reading */
+                                line_pos = 0;
+                            } else {
+                                /* Valid line found */
+                                if (strlen(line_buffer) > 0) {
+                                    TRACE_PRINTF("# %s\n", line_buffer);
+                                    valid_line_found = 1; /* Stop reading */
+                                } else {
+                                    /* Empty line, just reset */
+                                    line_pos = 0;
                                 }
                             }
-                            line = strtok(NULL, "\n");
+                        } else {
+                            if (line_pos < sizeof(line_buffer) - 1) {
+                                line_buffer[line_pos++] = c;
+                            }
+                            /* Else: line too long, truncate (ignore extra chars until newline) */
                         }
                     } else {
-                        /* EAGAIN or error means we are done */
+                        /* EAGAIN or error or EOF */
                         break;
                     }
                 }
                 
-                if (data_read && rocblas_log_file) {
+                if (rocblas_log_file) {
                     fflush(rocblas_log_file);
                 }
             }
@@ -1024,15 +1094,22 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
         
         if (rpv3_rocblas_pipe) {
             if (is_fifo || is_reg_file) {
-                STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS log file/pipe: %s\n", rpv3_rocblas_pipe);
-                
-                /* Open non-blocking */
-                rocblas_pipe_fd = open(rpv3_rocblas_pipe, O_RDONLY | O_NONBLOCK);
-                if (rocblas_pipe_fd != -1) {
-                    strncpy(rocblas_pipe_path, rpv3_rocblas_pipe, sizeof(rocblas_pipe_path) - 1);
-                    STATUS_PRINTF("[Kernel Tracer] Successfully opened RocBLAS log pipe\n");
+                /* Check for timeline mode + pipe incompatibility */
+                if (timeline_enabled && is_fifo) {
+                    fprintf(stderr, "[Kernel Tracer] Warning: RocBLAS logging with named pipes is not supported in timeline mode.\n");
+                    fprintf(stderr, "[Kernel Tracer] Please use a regular file for --rocblas with --timeline.\n");
+                    rpv3_rocblas_pipe = NULL; /* Disable logging */
                 } else {
-                    fprintf(stderr, "[Kernel Tracer] Failed to open RocBLAS log pipe: %s\n", strerror(errno));
+                    STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS log file/pipe: %s\n", rpv3_rocblas_pipe);
+                    
+                    /* Open non-blocking */
+                    rocblas_pipe_fd = open(rpv3_rocblas_pipe, O_RDONLY | O_NONBLOCK);
+                    if (rocblas_pipe_fd != -1) {
+                        strncpy(rocblas_pipe_path, rpv3_rocblas_pipe, sizeof(rocblas_pipe_path) - 1);
+                        STATUS_PRINTF("[Kernel Tracer] Successfully opened RocBLAS log pipe\n");
+                    } else {
+                        fprintf(stderr, "[Kernel Tracer] Failed to open RocBLAS log pipe: %s\n", strerror(errno));
+                    }
                 }
             } else {
                 STATUS_PRINTF("[Kernel Tracer] Pipe '%s' is not a FIFO or not found.\n", rpv3_rocblas_pipe);
