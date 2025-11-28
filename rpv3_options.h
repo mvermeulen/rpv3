@@ -11,12 +11,10 @@ extern "C" {
 #endif
 
 /* Version information */
-/* Version information */
-/* Version information */
-#define RPV3_VERSION "1.4.0"
+#define RPV3_VERSION "1.4.1"
 #define RPV3_VERSION_MAJOR 1
 #define RPV3_VERSION_MINOR 4
-#define RPV3_VERSION_PATCH 0
+#define RPV3_VERSION_PATCH 1
 
 
 /* Return codes */

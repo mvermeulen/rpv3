@@ -116,7 +116,7 @@ assert_contains "$output" "--timeline" "Help documents --timeline"
 # Test 9: Profiler initialization sequence
 print_info "Testing profiler initialization sequence..."
 output=$(LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
-assert_contains "$output" "Configuring profiler.*priority: 0" "Profiler configures with priority 0"
+assert_contains "$output" "Configuring RPV3.*Priority: 0" "Profiler configures with priority 0"
 assert_contains "$output" "Initializing profiler tool" "Profiler initializes"
 assert_contains "$output" "Profiler initialized successfully" "Profiler initialization succeeds"
 assert_contains "$output" "Finalizing profiler tool" "Profiler finalizes cleanly"

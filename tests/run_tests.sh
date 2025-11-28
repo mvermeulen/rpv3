@@ -20,20 +20,8 @@ print_header "RPV3 Kernel Tracer - Test Suite Runner"
 
 # Ensure project is built
 print_info "Ensuring project is built..."
-BUILD_DIR="$PROJECT_DIR/build"
-if [ ! -d "$BUILD_DIR" ]; then
-    print_info "Build directory not found. Building project..."
-    mkdir -p "$BUILD_DIR"
-    cd "$BUILD_DIR"
-    cmake ..
-    make
-    cd "$PROJECT_DIR"
-else
-    print_info "Build directory exists. Rebuilding to ensure latest code..."
-    cd "$BUILD_DIR"
-    make
-    cd "$PROJECT_DIR"
-fi
+cd "$PROJECT_DIR"
+make clean && make
 
 echo ""
 
@@ -85,6 +73,19 @@ if bash "$SCRIPT_DIR/test_counters.sh"; then
 else
     FAILED_SUITES=$((FAILED_SUITES + 1))
     print_fail "Counter tests failed"
+fi
+
+echo ""
+
+# Run README example tests
+print_header "Running README Example Tests"
+TOTAL_SUITES=$((TOTAL_SUITES + 1))
+if "$SCRIPT_DIR/test_readme_examples.py"; then
+    PASSED_SUITES=$((PASSED_SUITES + 1))
+    print_pass "README example tests passed"
+else
+    FAILED_SUITES=$((FAILED_SUITES + 1))
+    print_fail "README example tests failed"
 fi
 
 echo ""

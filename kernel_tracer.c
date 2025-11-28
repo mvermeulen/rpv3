@@ -25,6 +25,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <poll.h>
 
 #include "rpv3_options.h"
 
@@ -136,6 +137,14 @@ const char* lookup_kernel_name(rocprofiler_kernel_id_t kernel_id) {
     }
     
     return "<unknown>";
+}
+
+/* Helper function to check if a kernel is a Tensile routine */
+int is_tensile_kernel(const char* name) {
+    if (!name) return 0;
+    return (strstr(name, "Cijk") != NULL || 
+            strstr(name, "assembly") != NULL || 
+            strstr(name, "Tensile") != NULL);
 }
 
 /* Callback function for kernel symbol registration */
@@ -305,38 +314,7 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
         double time_since_start_ms = (start_ns > tracer_start_timestamp) ? 
                                      ((start_ns - tracer_start_timestamp) / 1000000.0) : 0.0;
         
-        /* Read from RocBLAS pipe if available */
-        char rocblas_log[512] = {0};
-        if (rocblas_pipe_fd != -1) {
-            ssize_t bytes_read = read(rocblas_pipe_fd, rocblas_log, sizeof(rocblas_log) - 1);
-        if (bytes_read > 0) {
-            rocblas_log[bytes_read] = '\0';
-            // Remove trailing newline
-            if (rocblas_log[bytes_read - 1] == '\n') {
-                rocblas_log[bytes_read - 1] = '\0';
-            }
-        } else {
-            if (bytes_read == -1 && errno != EAGAIN) {
-                // Error reading
-                rocblas_log[0] = '\0';
-            } else {
-                // No data or EAGAIN
-                rocblas_log[0] = '\0';
-            }
-        }
-        }
-
         if (csv_enabled) {
-            /* Write to CSV output with # prefix */
-            if (rocblas_log[0] != '\0') {
-                /* Split by newline and print each line with # prefix */
-                char* line = strtok(rocblas_log, "\n");
-                while (line != NULL) {
-                    TRACE_PRINTF("# %s\n", line);
-                    line = strtok(NULL, "\n");
-                }
-            }
-
             /* CSV mode: output complete line on EXIT */
             TRACE_PRINTF("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
                    kernel_name,
@@ -381,8 +359,61 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             TRACE_PRINTF("  End Timestamp: %lu ns\n", (unsigned long)end_ns);
             TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
             TRACE_PRINTF("  Time Since Start: %.3f ms\n", time_since_start_ms);
-            if (rocblas_log[0] != '\0') {
-                TRACE_PRINTF("  RocBLAS Log: %s\n", rocblas_log);
+        }
+            
+        /* Read from RocBLAS pipe if available and kernel matches pattern */
+        if (rocblas_pipe_fd != -1 && is_tensile_kernel(kernel_name)) {
+            struct pollfd pfd;
+            pfd.fd = rocblas_pipe_fd;
+            pfd.events = POLLIN;
+            
+            /* Wait up to 100ms for data */
+            int ret = poll(&pfd, 1, 100);
+            
+            if (ret > 0 && (pfd.revents & POLLIN)) {
+                char buffer[4096];
+                int data_read = 0;
+                
+                /* Drain the pipe */
+                while (1) {
+                    ssize_t bytes_read = read(rocblas_pipe_fd, buffer, sizeof(buffer) - 1);
+                    if (bytes_read > 0) {
+                        buffer[bytes_read] = '\0';
+                        data_read = 1;
+                        
+                        /* Write to log file if enabled */
+                        if (rocblas_log_file) {
+                            fprintf(rocblas_log_file, "%s", buffer);
+                        }
+
+                        /* Process lines for trace output */
+                        char* line = strtok(buffer, "\n");
+                        while (line != NULL) {
+                            /* Filter out create/destroy handle messages */
+                            if (strstr(line, "create_handle") == NULL && 
+                                strstr(line, "destroy_handle") == NULL) {
+                                
+                                /* Clean up carriage returns if present */
+                                size_t len = strlen(line);
+                                if (len > 0 && line[len-1] == '\r') {
+                                    line[len-1] = '\0';
+                                }
+                                
+                                if (strlen(line) > 0) {
+                                    TRACE_PRINTF("# %s\n", line);
+                                }
+                            }
+                            line = strtok(NULL, "\n");
+                        }
+                    } else {
+                        /* EAGAIN or error means we are done */
+                        break;
+                    }
+                }
+                
+                if (data_read && rocblas_log_file) {
+                    fflush(rocblas_log_file);
+                }
             }
         }
     }

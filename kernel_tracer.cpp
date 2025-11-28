@@ -28,6 +28,11 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <poll.h>
+#include <thread>
+#include <mutex>
+#include <atomic>
+#include <chrono>
 
 #include "rpv3_options.h"
 
@@ -64,12 +69,18 @@ namespace {
     // RocBLAS Log Pipe state
     int rocblas_pipe_fd = -1;
     // RocBLAS log pipe path
-static char rocblas_pipe_path[256] = {0};
+    static char rocblas_pipe_path[256] = {0};
 
-// RocBLAS log file handle
-static FILE* rocblas_log_file = NULL;
+    // RocBLAS log file handle
+    static FILE* rocblas_log_file = NULL;
+
     // Output macro for trace data (CSV or human-readable kernel details)
-    #define TRACE_PRINTF(...) fprintf(output_file ? output_file : stdout, __VA_ARGS__)
+    // Protected by a mutex to ensure atomic lines
+    std::mutex output_mutex;
+    #define TRACE_PRINTF(...) do { \
+        std::lock_guard<std::mutex> lock(output_mutex); \
+        fprintf(output_file ? output_file : stdout, __VA_ARGS__); \
+    } while(0)
 
     // Output macro for status messages (init, summary, errors)
     // If CSV output is enabled AND we are writing to a file, status messages go to stdout
@@ -95,6 +106,13 @@ std::string demangle_kernel_name(const char* mangled_name) {
     }
     
     return name;
+}
+
+// Helper function to check if a kernel is a Tensile routine
+bool is_tensile_kernel(const std::string& name) {
+    return (name.find("Cijk") != std::string::npos || 
+            name.find("assembly") != std::string::npos || 
+            name.find("Tensile") != std::string::npos);
 }
 
 // Callback function for kernel symbol registration
@@ -293,17 +311,22 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             return;
         }
         
+        // Common data retrieval
+        const auto& info = dispatch_data->dispatch_info;
+        std::string kernel_name = "<unknown>";
+        auto it = kernel_names.find(info.kernel_id);
+        if (it != kernel_names.end()) {
+            kernel_name = it->second;
+        } else {
+            // Only print debug if not in CSV mode to avoid breaking CSV format? 
+            // Or print to stderr?
+            // STATUS_PRINTF("[Kernel Tracer] Debug: Kernel name lookup failed for ID %lu\n", (unsigned long)info.kernel_id);
+        }
+
         if (csv_enabled) {
             // CSV mode: output complete line on EXIT
             uint64_t count = kernel_count.fetch_add(1) + 1;
             (void)count;  // Suppress unused variable warning
-            
-            const auto& info = dispatch_data->dispatch_info;
-            std::string kernel_name = "<unknown>";
-            auto it = kernel_names.find(info.kernel_id);
-            if (it != kernel_names.end()) {
-                kernel_name = it->second;
-            }
             
             uint64_t start_ns = dispatch_data->start_timestamp;
             uint64_t end_ns = dispatch_data->end_timestamp;
@@ -312,56 +335,6 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             double time_since_start_ms = (start_ns > tracer_start_timestamp) ? 
                                          ((start_ns - tracer_start_timestamp) / 1000000.0) : 0.0;
             
-            // Read from RocBLAS pipe if available
-            char rocblas_log[512] = {0};
-    /* Read from RocBLAS pipe if available */
-    if (rocblas_pipe_fd != -1) {
-        ssize_t bytes_read = -1;
-        int retries = 0;
-        while (retries < 100) {
-            bytes_read = read(rocblas_pipe_fd, rocblas_log, sizeof(rocblas_log) - 1);
-            if (bytes_read > 0) break;
-            if (bytes_read == -1 && errno == EAGAIN) {
-                // Wait a bit and retry
-                usleep(10000); // 10ms
-                retries++;
-            } else {
-                break;
-            }
-        }
-        
-        if (bytes_read > 0) {
-            rocblas_log[bytes_read] = '\0';
-            // Remove trailing newline
-            if (rocblas_log[bytes_read - 1] == '\n') {
-                rocblas_log[bytes_read - 1] = '\0';
-            }
-        } else {
-            if (bytes_read == -1 && errno != EAGAIN) {
-                // Error reading
-                rocblas_log[0] = '\0';
-            } else {
-                // No data or EAGAIN
-                rocblas_log[0] = '\0';
-            }
-        }
-    }
-            // Write to log file if enabled
-            if (rocblas_log_file && rocblas_log[0] != '\0') {
-                fprintf(rocblas_log_file, "%s\n", rocblas_log);
-                fflush(rocblas_log_file);
-            }
-
-            // Write to CSV output with # prefix
-            if (rocblas_log[0] != '\0') {
-                // Split by newline and print each line with # prefix
-                std::stringstream ss(rocblas_log);
-                std::string line;
-                while (std::getline(ss, line)) {
-                    TRACE_PRINTF("# %s\n", line.c_str());
-                }
-            }
-
             TRACE_PRINTF("\"%s\",%lu,%lu,%lu,%lu,%u,%u,%u,%u,%u,%u,%u,%u,%lu,%lu,%lu,%.3f,%.3f\n",
                    kernel_name.c_str(),
                    (unsigned long)record.thread_id,
@@ -390,16 +363,64 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
                 TRACE_PRINTF("  Start Timestamp: %lu ns\n", (unsigned long)dispatch_data->start_timestamp);
                 TRACE_PRINTF("  End Timestamp: %lu ns\n", (unsigned long)dispatch_data->end_timestamp);
                 TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
+            }
+        }
+        
+        // Read from RocBLAS pipe if available and kernel matches pattern
+        // This is now outside the if/else block so it runs for both CSV and Standard modes
+        if (rocblas_pipe_fd != -1 && is_tensile_kernel(kernel_name)) {
+            // Use poll to wait for data with timeout (robust against timing issues)
+            struct pollfd pfd;
+            pfd.fd = rocblas_pipe_fd;
+            pfd.events = POLLIN;
+            
+            // Wait up to 100ms for data
+            int ret = poll(&pfd, 1, 100);
+            
+            if (ret > 0 && (pfd.revents & POLLIN)) {
+                char buffer[4096];
+                bool data_read = false;
                 
-                // Read from RocBLAS pipe if available (also for human readable)
-                char rocblas_log[512] = {0};
-                if (rocblas_pipe_fd != -1) {
-                    ssize_t n = read(rocblas_pipe_fd, rocblas_log, sizeof(rocblas_log) - 1);
-                    if (n > 0) {
-                        rocblas_log[n] = '\0';
-                        if (rocblas_log[n-1] == '\n') rocblas_log[n-1] = '\0';
-                        TRACE_PRINTF("  RocBLAS Log: %s\n", rocblas_log);
+                // Drain the pipe
+                while (true) {
+                    ssize_t bytes_read = read(rocblas_pipe_fd, buffer, sizeof(buffer) - 1);
+                    if (bytes_read > 0) {
+                        buffer[bytes_read] = '\0';
+                        data_read = true;
+                        
+                        // Write to log file if enabled
+                        if (rocblas_log_file) {
+                            fprintf(rocblas_log_file, "%s", buffer);
+                        }
+                        
+                        // Process lines for trace output
+                        std::string content(buffer);
+                        std::stringstream ss(content);
+                        std::string line;
+                        while (std::getline(ss, line)) {
+                            // Filter out create/destroy handle messages
+                            if (line.find("create_handle") != std::string::npos ||
+                                line.find("destroy_handle") != std::string::npos) {
+                                continue;
+                            }
+                            
+                            // Clean up carriage returns if present
+                            if (!line.empty() && line.back() == '\r') {
+                                line.pop_back();
+                            }
+                            
+                            if (!line.empty()) {
+                                TRACE_PRINTF("# %s\n", line.c_str());
+                            }
+                        }
+                    } else {
+                        // EAGAIN means no more data, other errors mean pipe issue
+                        break;
                     }
+                }
+                
+                if (data_read && rocblas_log_file) {
+                    fflush(rocblas_log_file);
                 }
             }
         }
@@ -961,6 +982,8 @@ void tool_fini(void* tool_data) {
     (void) tool_data;
     
     STATUS_PRINTF("\n[Kernel Tracer] Finalizing profiler tool...\n");
+    
+    // Stop background thread
     
     if (rocblas_pipe_fd != -1) {
         close(rocblas_pipe_fd);

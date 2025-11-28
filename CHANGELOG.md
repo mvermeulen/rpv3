@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.4.1] - 2025-11-27
+### Changed
+- Refactored RocBLAS pipe support to remove background thread and implement synchronous reading for Tensile kernels only.
+- Improved filtering of RocBLAS log messages (ignoring handle creation/destruction).
+- Fixed potential deadlocks associated with the background thread.
+- Added dynamic README example verification test (`tests/test_readme_examples.py`).
+
 ## [1.4.0] - 2025-11-27
 ### Added
 - **RocBLAS Logging Control**: New `--rocblas <pipe>` option to integrate rocBLAS logs into the trace output.

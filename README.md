@@ -251,7 +251,7 @@ RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe --rocblas-log rocblas.log" LD_PRE
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring RPV3 v1.4.0 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.1 (Runtime: v1.0.0, Priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -291,7 +291,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring RPV3 v1.4.0 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.1 (Runtime: v1.0.0, Priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)
@@ -563,10 +563,12 @@ rpv3/
 ├── rpv3_options.c             # Options parsing implementation (shared)
 ├── rpv3_options.h             # Options parsing header
 ├── example_app.cpp            # Sample HIP application for testing
+├── example_rocblas.cpp        # Sample RocBLAS application for testing
 ├── docs/                      # Documentation
 │   ├── counter_collection_research.md  # Performance counter collection research
 │   ├── research_kernel_args.md         # Kernel argument access research
-│   └── csv_implementation_plan.md      # CSV feature implementation plan
+│   ├── csv_implementation_plan.md      # CSV feature implementation plan
+│   └── csv_summary_tool_research.md    # CSV summary tool research
 ├── tests/                     # Test suite
 │   ├── test_rpv3_options.c    # Unit tests for options parser
 │   ├── test_integration.sh    # Integration tests
@@ -574,6 +576,7 @@ rpv3/
 │   ├── test_counters.sh       # Counter collection tests
 │   ├── test_csv_output.sh     # CSV output tests
 │   ├── test_output_options.sh # Output options tests
+│   ├── test_readme_examples.py # README example verification script
 │   ├── run_tests.sh           # Master test runner
 │   ├── test_utils.sh          # Shared test utilities
 │   └── README.md              # Testing documentation
