@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.4.3] - 2025-11-27
+- Fixed RocBLAS logging issue by intercepting file opening functions to force no buffering.
+- Added support for reading RocBLAS logs from regular files.
+- Updated C tracer to match C++ functionality (interceptors, poll timeout, file support).
+
 ## [1.4.2] - 2025-11-27
 ### Added
 - `debug` target to `Makefile` for building with debug symbols (`-g -O0`).

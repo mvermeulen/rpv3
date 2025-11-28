@@ -1,0 +1,2 @@
+./rocblas-bench -f gemm -r f32_r --transposeA N --transposeB N -m 1024 -n 1024 -k 1024 --alpha 1 --lda 1024 --ldb 1024 --beta 0 --ldc 1024 
+- { rocblas_function: "rocblas_sgemm", atomics_mode: atomics_not_allowed, transA: 'N', transB: 'N', M: 1024, N: 1024, K: 1024, alpha: 1.0, lda: 1024, ldb: 1024, beta: 0.0, ldc: 1024, call_count: 1 }

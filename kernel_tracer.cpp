@@ -983,8 +983,8 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
         } else {
             // Check if it's a FIFO
             struct stat st;
-            if (stat(rpv3_rocblas_pipe, &st) == 0 && S_ISFIFO(st.st_mode)) {
-                STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS pipe: %s\n", rpv3_rocblas_pipe);
+            if (stat(rpv3_rocblas_pipe, &st) == 0 && (S_ISFIFO(st.st_mode) || S_ISREG(st.st_mode))) {
+                STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS log file/pipe: %s\n", rpv3_rocblas_pipe);
                 
                 // Open non-blocking
                 rocblas_pipe_fd = open(rpv3_rocblas_pipe, O_RDONLY | O_NONBLOCK);

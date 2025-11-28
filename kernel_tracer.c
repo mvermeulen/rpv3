@@ -3,6 +3,8 @@
  * Demonstrates using rocprofiler-sdk to trace kernel dispatches with detailed information
  */
 
+#define _GNU_SOURCE
+
 /* Enable POSIX features for strdup */
 #define _POSIX_C_SOURCE 200809L
 
@@ -26,6 +28,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <poll.h>
+#include <dlfcn.h>
 
 #include "rpv3_options.h"
 
@@ -100,6 +103,94 @@ typedef struct {
     counter_entry_t counters[MAX_COUNTERS];
     size_t count;
 } counter_list_t;
+
+/* Interceptors for RocBLAS logging */
+typedef FILE* (*fopen_t)(const char*, const char*);
+typedef FILE* (*fdopen_t)(int, const char*);
+static fopen_t real_fopen = NULL;
+static fopen_t real_fopen64 = NULL;
+static fdopen_t real_fdopen = NULL;
+
+FILE* fopen(const char* path, const char* mode) {
+    if (!real_fopen) {
+        real_fopen = (fopen_t)dlsym(RTLD_NEXT, "fopen");
+    }
+    FILE* fp = real_fopen(path, mode);
+    
+    const char* trace_path = getenv("ROCBLAS_LOG_TRACE_PATH");
+    const char* bench_path = getenv("ROCBLAS_LOG_BENCH_PATH");
+    const char* profile_path = getenv("ROCBLAS_LOG_PROFILE_PATH");
+    
+    int match = 0;
+    if (path) {
+        if (trace_path && strcmp(path, trace_path) == 0) match = 1;
+        else if (bench_path && strcmp(path, bench_path) == 0) match = 1;
+        else if (profile_path && strcmp(path, profile_path) == 0) match = 1;
+        else if (rpv3_rocblas_pipe && strcmp(path, rpv3_rocblas_pipe) == 0) match = 1;
+    }
+
+    if (fp && match) {
+         setvbuf(fp, NULL, _IONBF, 0);
+    }
+    return fp;
+}
+
+FILE* fopen64(const char* path, const char* mode) {
+    if (!real_fopen64) {
+        real_fopen64 = (fopen_t)dlsym(RTLD_NEXT, "fopen64");
+        if (!real_fopen64) real_fopen64 = (fopen_t)dlsym(RTLD_NEXT, "fopen");
+    }
+    FILE* fp = real_fopen64(path, mode);
+    
+    const char* trace_path = getenv("ROCBLAS_LOG_TRACE_PATH");
+    const char* bench_path = getenv("ROCBLAS_LOG_BENCH_PATH");
+    const char* profile_path = getenv("ROCBLAS_LOG_PROFILE_PATH");
+    
+    int match = 0;
+    if (path) {
+        if (trace_path && strcmp(path, trace_path) == 0) match = 1;
+        else if (bench_path && strcmp(path, bench_path) == 0) match = 1;
+        else if (profile_path && strcmp(path, profile_path) == 0) match = 1;
+        else if (rpv3_rocblas_pipe && strcmp(path, rpv3_rocblas_pipe) == 0) match = 1;
+    }
+    
+    if (fp && match) {
+         setvbuf(fp, NULL, _IONBF, 0);
+    }
+    return fp;
+}
+
+FILE* fdopen(int fd, const char* mode) {
+    if (!real_fdopen) {
+        real_fdopen = (fdopen_t)dlsym(RTLD_NEXT, "fdopen");
+    }
+    FILE* fp = real_fdopen(fd, mode);
+    
+    if (fp) {
+        char path[1024];
+        char proc_path[64];
+        snprintf(proc_path, sizeof(proc_path), "/proc/self/fd/%d", fd);
+        ssize_t len = readlink(proc_path, path, sizeof(path) - 1);
+        if (len != -1) {
+            path[len] = '\0';
+            
+            const char* trace_path = getenv("ROCBLAS_LOG_TRACE_PATH");
+            const char* bench_path = getenv("ROCBLAS_LOG_BENCH_PATH");
+            const char* profile_path = getenv("ROCBLAS_LOG_PROFILE_PATH");
+            
+            int match = 0;
+            if (trace_path && strcmp(path, trace_path) == 0) match = 1;
+            else if (bench_path && strcmp(path, bench_path) == 0) match = 1;
+            else if (profile_path && strcmp(path, profile_path) == 0) match = 1;
+            else if (rpv3_rocblas_pipe && strcmp(path, rpv3_rocblas_pipe) == 0) match = 1;
+            
+            if (match) {
+                 setvbuf(fp, NULL, _IONBF, 0);
+            }
+        }
+    }
+    return fp;
+}
 
 /* Helper function to store kernel name */
 void store_kernel_name(rocprofiler_kernel_id_t kernel_id, const char* name) {
@@ -355,10 +446,15 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
                    info.private_segment_size);
             TRACE_PRINTF("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
                    info.group_segment_size);
-            TRACE_PRINTF("  Start Timestamp: %lu ns\n", (unsigned long)start_ns);
-            TRACE_PRINTF("  End Timestamp: %lu ns\n", (unsigned long)end_ns);
-            TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
-            TRACE_PRINTF("  Time Since Start: %.3f ms\n", time_since_start_ms);
+            TRACE_PRINTF("  Group Segment Size: %u bytes (LDS memory per work-group)\n",
+                   info.group_segment_size);
+            
+            if (end_ns > 0) {
+                TRACE_PRINTF("  Start Timestamp: %lu ns\n", (unsigned long)start_ns);
+                TRACE_PRINTF("  End Timestamp: %lu ns\n", (unsigned long)end_ns);
+                TRACE_PRINTF("  Duration: %.3f μs\n", duration_us);
+                TRACE_PRINTF("  Time Since Start: %.3f ms\n", time_since_start_ms);
+            }
         }
             
         /* Read from RocBLAS pipe if available and kernel matches pattern */
@@ -367,8 +463,8 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
             pfd.fd = rocblas_pipe_fd;
             pfd.events = POLLIN;
             
-            /* Wait up to 100ms for data */
-            int ret = poll(&pfd, 1, 100);
+            /* Wait up to 500ms for data */
+            int ret = poll(&pfd, 1, 500);
             
             if (ret > 0 && (pfd.revents & POLLIN)) {
                 char buffer[4096];
@@ -910,10 +1006,10 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
                     rpv3_rocblas_pipe, env_pipe);
             fprintf(stderr, "[Kernel Tracer] Logging disabled to prevent mismatch.\n");
         } else {
-            /* Check if it's a FIFO */
+            /* Check if it's a FIFO or regular file */
             struct stat st;
-            if (stat(rpv3_rocblas_pipe, &st) == 0 && S_ISFIFO(st.st_mode)) {
-                STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS pipe: %s\n", rpv3_rocblas_pipe);
+            if (stat(rpv3_rocblas_pipe, &st) == 0 && (S_ISFIFO(st.st_mode) || S_ISREG(st.st_mode))) {
+                STATUS_PRINTF("[Kernel Tracer] Detected RocBLAS log file/pipe: %s\n", rpv3_rocblas_pipe);
                 
                 /* Open non-blocking */
                 rocblas_pipe_fd = open(rpv3_rocblas_pipe, O_RDONLY | O_NONBLOCK);
