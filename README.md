@@ -270,7 +270,7 @@ RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe" LD_PRELOAD=./libkernel_tracer.so
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring RPV3 v1.4.4 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.5 (Runtime: v1.0.0, Priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -310,7 +310,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring RPV3 v1.4.4 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.4.5 (Runtime: v1.0.0, Priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)
@@ -599,6 +599,9 @@ rpv3/
 │   ├── test_rocblas_file_relaxed.sh # Test for relaxed RocBLAS file checks
 │   ├── test_rocblas_filter.sh # Test for RocBLAS log filtering
 │   ├── test_rocblas_timeline.sh # Test for RocBLAS timeline support
+│   ├── test_rocblas_multistep.sh # Test for RocBLAS multi-step workflow
+│   ├── test_errors.sh         # Test for error handling
+│   ├── test_parity.sh         # Test for C vs C++ parity
 │   ├── run_tests.sh           # Master test runner
 │   ├── test_utils.sh          # Shared test utilities
 │   └── README.md              # Testing documentation

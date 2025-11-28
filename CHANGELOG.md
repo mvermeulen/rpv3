@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 
 
+## [1.4.5] - 2025-11-27
+
+### Added
+- New test scripts for improved coverage:
+    - `tests/test_rocblas_multistep.sh`: Verifies RocBLAS multi-step workflow.
+    - `tests/test_errors.sh`: Verifies error handling for invalid inputs.
+    - `tests/test_parity.sh`: Verifies output parity between C and C++ implementations.
+- Added `example_rocblas` to `.gitignore`.
+
+### Changed
+- Updated `README.md` to clarify RocBLAS named pipe usage (single-run workflow).
+- Updated `C_vs_CPP_COMPARISON.md` with implementation details section.
+
 ## [1.4.4] - 2025-11-27
 ### Changed
 - Relaxed RocBLAS environment variable checks: Regular files no longer require matching `ROCBLAS_LOG_TRACE` environment variable.
