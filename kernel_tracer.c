@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <poll.h>
 #include <dlfcn.h>
+#include <execinfo.h>
 
 #include "rpv3_options.h"
 
@@ -55,6 +56,9 @@ static rocprofiler_buffer_id_t trace_buffer = {0};
 
 /* CSV output mode state */
 static int csv_enabled = 0;
+
+/* Backtrace mode state */
+static int backtrace_enabled = 0;
 
 /* Counter collection state */
 static rpv3_counter_mode_t counter_mode = RPV3_COUNTER_MODE_NONE;
@@ -236,6 +240,57 @@ int is_tensile_kernel(const char* name) {
     return (strstr(name, "Cijk") != NULL || 
             strstr(name, "assembly") != NULL || 
             strstr(name, "Tensile") != NULL);
+}
+
+/* Helper function to print backtrace */
+void print_backtrace() {
+    const int max_frames = 64;
+    void* buffer[max_frames];
+    
+    /* Capture the backtrace */
+    int nptrs = backtrace(buffer, max_frames);
+    
+    if (nptrs <= 0) {
+        TRACE_PRINTF("  (backtrace unavailable)\n");
+        return;
+    }
+    
+    TRACE_PRINTF("\nCall Stack (%d frames):\n", nptrs);
+    
+    /* Process each frame */
+    for (int i = 0; i < nptrs; i++) {
+        Dl_info info;
+        
+        if (dladdr(buffer[i], &info)) {
+            /* Extract library name (basename only) */
+            const char* lib_name = "???";
+            if (info.dli_fname) {
+                const char* slash = strrchr(info.dli_fname, '/');
+                lib_name = slash ? (slash + 1) : info.dli_fname;
+            }
+            
+            /* Get function name */
+            if (info.dli_sname) {
+                /* Skip internal profiler frames */
+                if (strstr(lib_name, "libkernel_tracer") != NULL ||
+                    strstr(lib_name, "librocprofiler") != NULL) {
+                    continue;
+                }
+                
+                /* Calculate offset */
+                void* offset = (void*)((char*)buffer[i] - (char*)info.dli_saddr);
+                
+                TRACE_PRINTF("  #%-2d %s: %s + %p\n", i, lib_name, info.dli_sname, offset);
+            } else {
+                /* No symbol name available */
+                TRACE_PRINTF("  #%-2d %s: [0x%lx]\n", i, lib_name, (unsigned long)buffer[i]);
+            }
+        } else {
+            /* dladdr failed */
+            TRACE_PRINTF("  #%-2d [0x%lx]\n", i, (unsigned long)buffer[i]);
+        }
+    }
+    TRACE_PRINTF("\n");
 }
 
 /* Callback function for kernel symbol registration */
@@ -485,6 +540,20 @@ void kernel_dispatch_callback(rocprofiler_callback_tracing_record_t record,
                    (unsigned long)duration_ns,
                    duration_us,
                    time_since_start_ms);
+        } else if (backtrace_enabled) {
+            /* Backtrace mode: print kernel info and call stack */
+            TRACE_PRINTF("\n[Kernel Trace #%lu]\n", (unsigned long)count);
+            TRACE_PRINTF("  Kernel Name: %s\n", kernel_name);
+            TRACE_PRINTF("  Dispatch ID: %lu\n", (unsigned long)info.dispatch_id);
+            TRACE_PRINTF("  Grid Size: [%u, %u, %u]\n", 
+                   info.grid_size.x, 
+                   info.grid_size.y, 
+                   info.grid_size.z);
+            
+            /* Print the backtrace */
+            print_backtrace();
+            
+            TRACE_PRINTF("----------------------------------------\n");
         } else {
             /* Standard mode: display full details on exit */
             TRACE_PRINTF("\n[Kernel Trace #%lu]\n", (unsigned long)count);
@@ -1033,6 +1102,22 @@ int tool_init(rocprofiler_client_finalize_t fini_func,
     
     /* Check if CSV mode is enabled (from rpv3_options) */
     csv_enabled = (rpv3_csv_enabled != 0);
+    
+    /* Check if backtrace mode is enabled (from rpv3_options) */
+    backtrace_enabled = (rpv3_backtrace_enabled != 0);
+    
+    /* Validate: backtrace is incompatible with timeline and CSV */
+    /* (This should already be caught in rpv3_parse_options, but double-check here) */
+    if (backtrace_enabled) {
+        if (timeline_enabled) {
+            fprintf(stderr, "[Kernel Tracer] Error: Backtrace mode is incompatible with timeline mode\n");
+            return -1;
+        }
+        if (csv_enabled) {
+            fprintf(stderr, "[Kernel Tracer] Error: Backtrace mode is incompatible with CSV mode\n");
+            return -1;
+        }
+    }
 
     /* Handle output redirection */
     if (rpv3_output_file) {

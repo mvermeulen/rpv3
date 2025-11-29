@@ -11,10 +11,11 @@ extern "C" {
 #endif
 
 /* Version information */
-#define RPV3_VERSION "1.5.0"
 #define RPV3_VERSION_MAJOR 1
 #define RPV3_VERSION_MINOR 5
-#define RPV3_VERSION_PATCH 0
+#define RPV3_VERSION_PATCH 1
+#define RPV3_VERSION_STRING "1.5.1"
+#define RPV3_VERSION "1.5.1"  /* For backward compatibility */
 
 
 /* Return codes */
@@ -50,6 +51,9 @@ extern char* rpv3_rocblas_pipe;
 /* Global rocBLAS log file path (set by --rocblas-log option) */
 extern char* rpv3_rocblas_log_file;
 
+/* Global flag for backtrace mode (set by --backtrace option) */
+extern int rpv3_backtrace_enabled;
+
 /**
  * Parse options from the RPV3_OPTIONS environment variable
  * 
@@ -62,6 +66,7 @@ extern char* rpv3_rocblas_log_file;
  *   --counter <group> : Enable counter collection (compute, memory, mixed)
  *   --output <filename> : Redirect output to specified file (sets rpv3_output_file)
  *   --outputdir <directory> : Redirect output to directory with PID-based filename (sets rpv3_output_dir)
+ *   --backtrace : Enable function backtrace at kernel dispatch (incompatible with --timeline and --csv)
  * 
  * @return RPV3_OPTIONS_CONTINUE (0) to continue normal operation
  *         RPV3_OPTIONS_EXIT (1) to exit early without initializing profiler

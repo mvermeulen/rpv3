@@ -40,7 +40,7 @@ assert_file_exists "$BUILD_DIR/example_app" "Example app exists"
 print_info "Testing --version option with C++ library..."
 output=$(RPV3_OPTIONS="--version" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1 || true)
 assert_contains "$output" "RPV3 Kernel Tracer version" "Version output contains version string"
-assert_contains "$output" "1.4.5" "Version output contains correct version number"
+assert_contains "$output" "1.5.1" "Version output contains correct version number"
 
 
 # Test 3: Version option (C library)
@@ -171,6 +171,26 @@ else
     TESTS_FAILED=$((TESTS_FAILED + 1))
 fi
 TESTS_RUN=$((TESTS_RUN + 1))
+
+# Test 15: Backtrace mode (C++ library)
+print_info "Testing --backtrace option with C++ library..."
+output=$(RPV3_OPTIONS="--backtrace" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1)
+assert_contains "$output" "Backtrace mode enabled" "Backtrace mode is enabled"
+assert_contains "$output" "Call Stack" "Call stack is printed"
+assert_contains "$output" "libamdhip64.so" "HIP library is shown in backtrace"
+assert_contains "$output" "example_app" "Application is shown in backtrace"
+assert_not_contains "$output" "Thread ID:" "Thread ID not shown in backtrace mode"
+assert_not_contains "$output" "Correlation ID:" "Correlation ID not shown in backtrace mode"
+
+# Test 16: Backtrace incompatibility with --timeline
+print_info "Testing --backtrace incompatibility with --timeline..."
+output=$(RPV3_OPTIONS="--backtrace --timeline" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1 || true)
+assert_contains "$output" "Error.*backtrace.*incompatible.*timeline" "Backtrace rejects timeline mode"
+
+# Test 17: Backtrace incompatibility with --csv
+print_info "Testing --backtrace incompatibility with --csv..."
+output=$(RPV3_OPTIONS="--backtrace --csv" LD_PRELOAD="$BUILD_DIR/libkernel_tracer.so" "$BUILD_DIR/example_app" 2>&1 || true)
+assert_contains "$output" "Error.*backtrace.*incompatible.*csv" "Backtrace rejects CSV mode"
 
 
 print_summary

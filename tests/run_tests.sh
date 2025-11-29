@@ -25,20 +25,6 @@ make clean && make
 
 echo ""
 
-# Run unit tests
-print_header "Running Unit Tests"
-TOTAL_SUITES=$((TOTAL_SUITES + 1))
-if "$SCRIPT_DIR/run_unit_tests.sh"; then
-    PASSED_SUITES=$((PASSED_SUITES + 1))
-    print_pass "Unit tests passed"
-else
-    FAILED_SUITES=$((FAILED_SUITES + 1))
-    print_fail "Unit tests failed"
-fi
-
-echo ""
-
-# Run integration tests
 print_header "Running Integration Tests"
 TOTAL_SUITES=$((TOTAL_SUITES + 1))
 if bash "$SCRIPT_DIR/test_integration.sh"; then

@@ -15,6 +15,7 @@ A sample shared library that demonstrates using the **rocprofv3** (ROCm Profiler
   - [CSV Output Support](#csv-output-support)
   - [Counter Collection](#counter-collection)
   - [RocBLAS Logging](#rocblas-logging)
+  - [Backtrace Support](#backtrace-support)
 - [Example Output](#example-output)
   - [Basic Output](#basic-output)
   - [Timeline Mode](#timeline-mode-output)
@@ -104,6 +105,7 @@ The profiler supports configuration via the `RPV3_OPTIONS` environment variable.
 - `--help` or `-h` - Print help message and exit
 - `--timeline` - Enable timeline mode with GPU timestamps
 - `--csv` - Enable CSV output mode for machine-readable data export
+- `--backtrace` - Enable function backtrace at kernel dispatch (incompatible with --timeline and --csv)
 - `--output <file>` - Redirect output to the specified file
 - `--outputdir <dir>` - Redirect output to the specified directory using PID-based filenames
 - `--counter <group>` - Enable counter collection. Groups: `compute`, `memory`, `mixed`
@@ -288,6 +290,39 @@ RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe" LD_PRELOAD=./libkernel_tracer.so
 
 **Note:** The tracer filters out internal API calls (`rocblas_create_handle`, `rocblas_destroy_handle`, `rocblas_set_stream`) to keep the trace clean.
 
+### Backtrace Support
+
+Capture CPU-side call stacks at kernel dispatch points to identify which libraries and functions triggered kernel launches.
+
+**Features:**
+- ✅ Full call stack from kernel dispatch to application entry
+- ✅ Shared library identification (RocBLAS, hipBLAS, MIOpen, etc.)
+- ✅ Function name resolution with demangling (C++)
+- ✅ Frame-by-frame stack unwinding
+- ⚠️ NOT compatible with `--timeline` or `--csv` modes
+
+**Usage:**
+```bash
+# Basic backtrace
+RPV3_OPTIONS="--backtrace" LD_PRELOAD=./libkernel_tracer.so ./example_app
+
+# With RocBLAS application
+RPV3_OPTIONS="--backtrace" LD_PRELOAD=./libkernel_tracer.so ./example_rocblas
+```
+
+**Requirements:**
+- Compile with `-g` for debug symbols (optional, improves symbol resolution)
+- Link with `-rdynamic` (optional, exports dynamic symbols for better resolution)
+- Shared libraries should have debug symbols for best results
+
+**Use Cases:**
+- **Library Attribution**: Identify which library (RocBLAS, hipBLAS, MIOpen) triggered a kernel
+- **Call Path Understanding**: See the complete path from application code through library layers
+- **Debugging Aid**: Trace unexpected kernels back to their source
+- **Performance Analysis**: Correlate kernel performance with calling context
+
+**Note:** Backtrace adds overhead (~100-500μs per kernel) and is intended for debugging/analysis, not production profiling.
+
 ---
 
 ## Example Output
@@ -297,7 +332,7 @@ RPV3_OPTIONS="--csv --rocblas rocblas_log_pipe" LD_PRELOAD=./libkernel_tracer.so
 C++ version with demangled kernel names:
 
 ```
-[Kernel Tracer] Configuring RPV3 v1.5.0 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.5.1 (Runtime: v1.0.0, Priority: 0)
 [Kernel Tracer] Initializing profiler tool...
 [Kernel Tracer] Profiler initialized successfully
 === ROCm Kernel Tracing Example ===
@@ -337,7 +372,7 @@ With `--timeline` option, includes GPU timestamps:
 
 ```
 [RPV3] Timeline mode enabled
-[Kernel Tracer] Configuring RPV3 v1.5.0 (Runtime: v1.0.0, Priority: 0)
+[Kernel Tracer] Configuring RPV3 v1.5.1 (Runtime: v1.0.0, Priority: 0)
 ...
 [Kernel Trace #1]
   Kernel Name: vectorAdd(float const*, float const*, float*, int)
@@ -403,6 +438,42 @@ KernelName,ThreadID,CorrelationID,KernelID,DispatchID,GridX,GridY,GridZ,Workgrou
 # rocblas_sgemm,N,N,1024,1024,1024,1,0x7f02a3800000,1024,0x7f02a3200000,1024,0,0x7f02a2c00000,1024,atomics_not_allowed
 "Cijk_Ailk_Bljk_SB_MT32x32x8_SN_1LDSB0_APM1_ABV0_ACED0_AF0EM1_AF1EM1_AMAS0_ASE_ASGT_ASLT_ASM_ASAE01_ASCE01_ASEM1_AAC0_BL1_BS1_CLR0_DTLA0_DTLB0_DTVA0_DTVB0_DVO0_ETSP_EPS0_ELFLR0_EMLL0_FSSC10_FL0_GLVWA1_GLVWB1_GRCGA1_GRCGB1_GRPM1_GRVW1_GSU1_GSUASB_GLS0_ISA1151_IU1_K1_KLA_LBSPPA0_LBSPPB0_LPA0_LPB0_LDL1_LRVW1_LWPMn1_LDW0_FMA_MIAV0_MDA2_MO40_MMFGLC_MKFGSU256_NTA0_NTB0_NTC0_NTD0_NEPBS0_NLCA1_NLCB1_ONLL1_OPLV0_PK0_PAP0_PGR0_PLR1_PKA0_SIA1_SLW1_SS0_SU32_SUM0_SUS256_SCIUI1_SPO0_SRVW0_SSO0_SVW4_SNLL0_TSGRA0_TSGRB0_TT2_2_TLDS0_UMLDSA0_UMLDSB0_U64SL1_USFGROn1_VAW1_VSn1_VW1_VWB1_VFLRP0_WSGRA0_WSGRB0_WS64_WG16_16_1_WGM8",9407,1,245,1,8192,32,1,256,1,1,0,2048,0,0,0,0.000,0.000
 ```
+
+### Backtrace Output Example
+
+With `--backtrace` option:
+
+```
+[Kernel Trace #1]
+  Kernel Name: Cijk_Ailk_Bljk_SB_MT32x32x8_SN_1LDSB0_APM1_ABV0_ACED0_AF0EM1_AF1EM1_AMAS0...
+  Dispatch ID: 1
+  Grid Size: [8192, 32, 1]
+
+Call Stack (21 frames):
+  #2  librocprofiler-sdk.so: [0x71a0c27fd18b]
+  #3  libhsa-runtime64.so.1: [0x71a0cee7f4d6]
+  #4  libhsa-runtime64.so.1: [0x71a0cee70a8f]
+  #5  libamdhip64.so.7: [0x71a0d0455ae4]
+  #6  libamdhip64.so.7: [0x71a0d0451b86]
+  #7  libamdhip64.so.7: [0x71a0d0452221]
+  #8  libamdhip64.so.7: [0x71a0d041b185]
+  #9  libamdhip64.so.7: [0x71a0d02ae2a7]
+  #10 libamdhip64.so.7: [0x71a0d02d19c7]
+  #11 librocprofiler-sdk.so: [0x71a0c2b4c14e]
+  #12 librocblas.so.5: [0x71a0d48723c2]
+  #13 librocblas.so.5: [0x71a0d48725e5]
+  #14 librocblas.so.5: [0x71a0d3e5576a]
+  #15 librocblas.so.5: [0x71a0d3b83f78]
+  #16 librocblas.so.5: rocblas_sgemm + 0x869
+  #17 example_rocblas: [0x2028f7]
+  #18 libc.so.6: [0x71a0cf82a1ca]
+  #19 libc.so.6: __libc_start_main + 0x8b
+  #20 example_rocblas: [0x202175]
+
+----------------------------------------
+```
+
+**Key Insight:** The backtrace shows that the Tensile kernel was launched by `rocblas_sgemm` (frame #16), not directly by the application. This helps identify library attribution and understand the call path.
 
 ---
 

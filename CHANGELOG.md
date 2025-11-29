@@ -5,7 +5,31 @@ All notable changes to the RPV3 Kernel Tracer project will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+---
 
+## [1.5.1] - 2025-11-28
+
+### Added
+- **Backtrace Support**: New `--backtrace` option to capture CPU-side call stacks at kernel dispatch points
+  - Full call stack from kernel dispatch to application entry
+  - Shared library identification (RocBLAS, hipBLAS, MIOpen, etc.)
+  - Function name resolution with C++ demangling
+  - Frame-by-frame stack unwinding with library attribution
+  - Incompatible with `--timeline` and `--csv` modes (validated at runtime)
+- Comprehensive test suite for backtrace functionality (`tests/test_backtrace.sh`)
+- Integration tests for backtrace mode
+- Detailed documentation in README with usage examples and output samples
+- Research documentation (`docs/backtrace_research.md`)
+
+### Changed
+- Updated README with Backtrace Support section
+- Enhanced test suite with backtrace validation
+
+### Notes
+- Backtrace adds overhead (~100-500μs per kernel) and is intended for debugging/analysis
+- Argument extraction for selected functions planned for future release (Phase 3)
+
+---
 
 ## [1.5.0] - 2025-11-27
 

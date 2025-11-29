@@ -5,14 +5,6 @@ This document tracks planned features, improvements, and known issues for the RP
 ## High Priority
 
 ### Features
-- [ ] Implement backtrace support for library context tracking
-  - [ ] Research backtrace APIs (libunwind, execinfo, etc.)
-  - [ ] Capture call stack during kernel dispatch
-  - [ ] Identify calling library (RocBLAS, hipBLAS, MIOpen, etc.)
-  - [ ] Add library context to trace output (CSV and human-readable)
-  - [ ] Enable library-specific filtering and analysis
-  - [ ] Support future library-specific integrations
-
 - [ ] Implement performance counter collection
   - [x] Research rocprofiler-sdk counter APIs (see `docs/counter_collection_research.md`)
   - [x] Add `--counter` option support (C++ and C implementations)
@@ -91,6 +83,15 @@ This document tracks planned features, improvements, and known issues for the RP
 - [ ] Add CI/CD pipeline
 
 ## Completed
+
+### Version 1.5.1 (2025-11-28)
+- [x] Implement backtrace support for library context tracking
+  - [x] Research backtrace APIs (libunwind vs execinfo)
+  - [x] Implement `--backtrace` option with library resolution
+  - [x] Add shared library identification
+  - [x] Create comprehensive test suite
+  - [x] Document in README with examples
+  - [x] Add incompatibility validation with --timeline and --csv
 
 ### Version 1.5.0 (2025-11-27)
 - [x] Implement CSV summary tool with M, N, K extraction

@@ -34,6 +34,9 @@ char* rpv3_rocblas_pipe = NULL;
 /* Global rocBLAS log file path */
 char* rpv3_rocblas_log_file = NULL;
 
+/* Global flag for backtrace mode */
+int rpv3_backtrace_enabled = 0;
+
 /* Parse options from the RPV3_OPTIONS environment variable */
 int rpv3_parse_options(void) {
     const char* options_env = getenv("RPV3_OPTIONS");
@@ -74,6 +77,7 @@ int rpv3_parse_options(void) {
             printf("  --outputdir <dir> Redirect output to directory with PID-based filename\n");
             printf("  --rocblas <pipe>  Read rocBLAS logs from named pipe\n");
             printf("  --rocblas-log <file> Redirect rocBLAS logs to file (requires --rocblas)\n");
+            printf("  --backtrace  Enable function backtrace (incompatible with --timeline, --csv)\n");
             printf("\nExample:\n");
             printf("  RPV3_OPTIONS=\"--version\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
             printf("  RPV3_OPTIONS=\"--timeline\" LD_PRELOAD=./libkernel_tracer.so ./app\n");
@@ -144,6 +148,10 @@ int rpv3_parse_options(void) {
                 }
             }
         }
+        else if (strcmp(token, "--backtrace") == 0) {
+            rpv3_backtrace_enabled = 1;
+            printf("[RPV3] Backtrace mode enabled\n");
+        }
         else {
             fprintf(stderr, "[RPV3] Warning: Unknown option '%s' (ignored)\n", token);
         }
@@ -152,6 +160,20 @@ int rpv3_parse_options(void) {
     }
     
     free(options_copy);
+    
+    /* Validate incompatible option combinations */
+    if (rpv3_backtrace_enabled) {
+        if (rpv3_timeline_enabled) {
+            fprintf(stderr, "[RPV3] Error: --backtrace is incompatible with --timeline\n");
+            fprintf(stderr, "[RPV3]        Backtrace overhead would distort timing measurements\n");
+            return RPV3_OPTIONS_EXIT;
+        }
+        if (rpv3_csv_enabled) {
+            fprintf(stderr, "[RPV3] Error: --backtrace is incompatible with --csv\n");
+            fprintf(stderr, "[RPV3]        Variable-length backtraces don't fit CSV schema\n");
+            return RPV3_OPTIONS_EXIT;
+        }
+    }
     
     return should_exit ? RPV3_OPTIONS_EXIT : RPV3_OPTIONS_CONTINUE;
 }
