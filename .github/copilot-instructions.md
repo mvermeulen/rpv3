@@ -151,24 +151,106 @@ make
 
 ## Testing Requirements
 
-**ALWAYS** run relevant tests after code changes:
+**ALWAYS** run relevant tests after code changes. Use this decision tree:
+
+### Quick Test Selection Guide
+
+| Change Type | Required Tests | Command |
+|-------------|---------------|---------|
+| Options parser (`rpv3_options.c/h`) | Unit tests | `tests/run_unit_tests.sh` |
+| Core tracer logic | Integration + Parity | `tests/test_integration.sh && tests/test_parity.sh` |
+| RocBLAS integration | RocBLAS tests | `tests/test_rocblas_*.sh` |
+| CSV output | CSV tests | `tests/test_csv_output.sh && tests/test_csv_summary.py` |
+| Counter collection | Counter tests | `tests/test_counters.sh` |
+| Timeline mode | Timeline tests | `tests/test_timeline_flag.c` |
+| Backtrace feature | Backtrace tests | `tests/test_backtrace.sh` |
+| Any code change | **ALL TESTS** | `cd tests && ./run_tests.sh` |
+
+### Test Suite Overview
 
 1. **Unit Tests**: `tests/run_unit_tests.sh`
    - Tests `rpv3_options.c` parser logic
+   - Fast execution (~1 second)
+   - Run after modifying options parsing
    
 2. **Integration Tests**: `tests/test_integration.sh`
    - End-to-end tracing with `example_app`
+   - Tests all major features
+   - Run after modifying core tracer logic
    
 3. **Parity Tests**: `tests/test_parity.sh`
    - Verifies C and C++ implementations match
+   - **CRITICAL**: Must pass before any commit
+   - Run after modifying either implementation
    
 4. **Specialized Tests**:
-   - RocBLAS: `tests/test_rocblas_*.sh`
-   - CSV: `tests/test_csv_output.sh`, `tests/test_csv_summary.py`
-   - Counters: `tests/test_counters.sh`
-   - Timeline: `tests/test_timeline_flag.c`
+   - **RocBLAS**: `tests/test_rocblas_*.sh`
+     - Requires RocBLAS library
+     - Tests named pipe and file-based logging
+   - **CSV**: `tests/test_csv_output.sh`, `tests/test_csv_summary.py`
+     - Validates CSV format and parsing
+   - **Counters**: `tests/test_counters.sh`
+     - May gracefully fail on unsupported hardware
+   - **Timeline**: `tests/test_timeline_flag.c`
+     - Tests GPU timestamp functionality
+   - **Backtrace**: `tests/test_backtrace.sh`
+     - Tests call stack capture and library resolution
+   - **README Examples**: `tests/test_readme_examples.py`
+     - Validates examples in documentation
 
-**Run all tests**: `cd tests && ./run_tests.sh`
+### Running All Tests
+
+```bash
+# Recommended: Run from tests directory
+cd tests && ./run_tests.sh
+
+# Alternative: Run from project root
+make test
+
+# CMake/CTest integration
+cd build && ctest --output-on-failure
+```
+
+### Test Failure Debugging
+
+If tests fail:
+
+1. **Check test output** for specific failure messages
+2. **Run individual test** to isolate the issue:
+   ```bash
+   cd tests
+   bash -x test_integration.sh  # Debug mode
+   ```
+3. **Verify build** is up-to-date:
+   ```bash
+   make clean && make
+   ```
+4. **Check environment**:
+   ```bash
+   # Verify ROCm installation
+   rocminfo | grep "Name:"
+   
+   # Check library paths
+   ldd ./libkernel_tracer.so
+   
+   # Verify GPU access
+   rocminfo | grep "gfx"
+   ```
+5. **Check for stale artifacts**:
+   ```bash
+   # Clean all build artifacts
+   make clean
+   rm -rf build
+   rm -f tests/*.o tests/test_rpv3_options
+   ```
+
+### Test Coverage Goals
+
+- **Unit tests**: 100% coverage of options parser
+- **Integration tests**: All major features exercised
+- **Parity tests**: Identical output from C and C++ versions
+- **Regression tests**: No performance degradation
+
 
 ## Code Modification Guidelines
 
@@ -195,6 +277,181 @@ make
 2. **Update help text**: `rpv3_print_help()` function
 3. **Add unit tests** in `tests/test_rpv3_options.c`
 4. **Document in README.md** under "Configuration Options"
+
+### When Adding New Files
+
+#### Source Files (`.c`, `.cpp`, `.h`)
+
+1. **Determine file type and location**:
+   - Core tracer code: Root directory (`kernel_tracer.cpp`, `kernel_tracer.c`)
+   - Options/shared code: Root directory (`rpv3_options.c/h`)
+   - Example applications: Root directory (`example_*.cpp`)
+   - Utilities: `utils/` directory
+   - Documentation: `docs/` directory
+   - Tests: `tests/` directory
+
+2. **Add to build system**:
+   
+   **CMakeLists.txt**:
+   ```cmake
+   # For new library source
+   add_library(new_lib SHARED new_file.cpp)
+   target_link_libraries(new_lib PRIVATE rocprofiler-sdk::rocprofiler-sdk)
+   
+   # For new executable
+   add_executable(new_tool new_tool.cpp)
+   target_link_libraries(new_tool PRIVATE hip::host)
+   
+   # For new utility
+   # Add to utils/CMakeLists.txt if it exists, or create entry
+   ```
+   
+   **Makefile**:
+   ```makefile
+   # Add to appropriate target (all, utils, tests, etc.)
+   new_tool: new_tool.cpp
+       $(HIPCC) -o new_tool new_tool.cpp $(CXXFLAGS) $(LDFLAGS)
+   
+   # Add to clean target
+   clean:
+       rm -f new_tool ...
+   ```
+
+3. **Add file header**:
+   ```c
+   /*
+    * MIT License
+    * 
+    * Copyright (c) 2024 RPV3 Kernel Tracer
+    * 
+    * Brief description of file purpose
+    */
+   ```
+
+4. **Update `.gitignore` if needed**:
+   - Add build artifacts (executables, `.o` files)
+   - Do NOT ignore source files (`.c`, `.cpp`, `.h`)
+   - Example:
+     ```
+     # If adding new_tool executable
+     new_tool
+     ```
+
+5. **Update documentation**:
+   - Add to "File Organization" section in `README.md`
+   - Add to "Project Structure" in `copilot-instructions.md` if significant
+   - Document purpose and usage
+
+#### Test Files
+
+1. **Naming convention**:
+   - Shell scripts: `tests/test_*.sh`
+   - Python tests: `tests/test_*.py`
+   - C/C++ tests: `tests/test_*.c` or `tests/test_*.cpp`
+
+2. **Add to test suite**:
+   - Update `tests/run_tests.sh` to include new test
+   - Add to `tests/CMakeLists.txt` for CTest integration:
+     ```cmake
+     add_test(NAME test_new_feature COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/test_new_feature.sh)
+     ```
+
+3. **Make executable**:
+   ```bash
+   chmod +x tests/test_new_feature.sh
+   ```
+
+4. **Follow test conventions**:
+   - Use `tests/test_utils.sh` for common functions
+   - Return 0 for success, non-zero for failure
+   - Print clear pass/fail messages
+
+#### Utility Files (`utils/`)
+
+1. **Add to utils directory**:
+   - Diagnostic tools: `check_*.cpp`, `diagnose_*.cpp`
+   - Analysis tools: `*.py`, `*.sh`
+
+2. **Update `utils/README.md`**:
+   - Document tool purpose
+   - Provide usage examples
+   - List dependencies
+
+3. **Add to build system**:
+   - Update `Makefile` utils target
+   - Add to `utils/CMakeLists.txt` if using CMake
+
+4. **Add to clean target**:
+   ```makefile
+   clean:
+       cd utils && rm -f new_util
+   ```
+
+#### Documentation Files (`.md`)
+
+1. **Location**:
+   - Root documentation: `README.md`, `CHANGELOG.md`, `TODO.md`, `LICENSE`
+   - Research/design docs: `docs/` directory
+   - Release docs: `RELEASE_CHECKLIST.md`, `RELEASE_NOTES_*.md`
+
+2. **Update cross-references**:
+   - Add links in `README.md` if user-facing
+   - Reference in `TODO.md` if planning document
+   - Update `.github/copilot-instructions.md` if procedural
+
+3. **Follow markdown conventions**:
+   - Use proper heading hierarchy
+   - Include code examples with language tags
+   - Add "Last Updated" date at bottom
+
+#### Configuration Files
+
+1. **Build configuration**:
+   - `CMakeLists.txt`: CMake build
+   - `Makefile`: Make build
+   - `.github/workflows/*.yml`: CI/CD (if added)
+
+2. **Git configuration**:
+   - `.gitignore`: Ignore patterns
+   - `.gitattributes`: Git attributes (if needed)
+
+3. **IDE configuration**:
+   - `.vscode/`: VS Code settings (add to `.gitignore`)
+   - `.idea/`: IntelliJ settings (add to `.gitignore`)
+
+#### Checklist for Adding Any File
+
+- [ ] File is in correct directory
+- [ ] File has proper header/license comment
+- [ ] Added to build system (CMakeLists.txt and/or Makefile)
+- [ ] Added to `.gitignore` if build artifact
+- [ ] NOT in `.gitignore` if source file
+- [ ] Executable permissions set if script (`chmod +x`)
+- [ ] Documentation updated (README, copilot-instructions, etc.)
+- [ ] Tests added if applicable
+- [ ] Cross-references updated
+- [ ] File follows project conventions (C11/C++17, style guide)
+- [ ] Verified build succeeds: `make clean && make`
+- [ ] Verified tests pass: `cd tests && ./run_tests.sh`
+- [ ] Update CHANGELOG.md if user-facing
+- [ ] Update TODO.md if part of planned work
+
+#### Common Mistakes to Avoid
+
+❌ **Don't**: Add build artifacts (`.o`, `.so`, executables) to git
+✅ **Do**: Add them to `.gitignore`
+
+❌ **Don't**: Forget to update both build systems (CMake AND Makefile)
+✅ **Do**: Test both: `make clean && make` and `rm -rf build && cmake -B build && cmake --build build`
+
+❌ **Don't**: Add files without documentation
+✅ **Do**: Update README.md or add comments explaining purpose
+
+❌ **Don't**: Add test files without integrating into test suite
+✅ **Do**: Update `tests/run_tests.sh` and `tests/CMakeLists.txt`
+
+❌ **Don't**: Use inconsistent naming conventions
+✅ **Do**: Follow existing patterns (`test_*.sh`, `example_*.cpp`, etc.)
 
 ## Common Patterns
 
@@ -292,19 +549,75 @@ uint64_t count = atomic_fetch_add(&counter, 1) + 1;
 1. **No output / Library not loaded**:
    - Check `LD_PRELOAD` path (use absolute or `./` prefix)
    - Verify ROCm installation: `/opt/rocm`
+   - Ensure library was built: `ls -lh libkernel_tracer*.so`
 
 2. **RocBLAS pipe hangs**:
    - Ensure pipe reader starts BEFORE writer
    - Use background process: `command &`
    - Check non-blocking mode implementation
+   - Verify pipe exists: `ls -l /tmp/rocblas.log`
 
 3. **Counters unavailable**:
    - Run `utils/diagnose_counters` to check support
    - Some counters hardware-specific (e.g., MI210)
+   - Check kernel version: `uname -r` (may need 6.8+)
+   - Verify group membership: `groups` (need render/video)
 
 4. **Build failures**:
    - Check ROCm paths: `CMAKE_PREFIX_PATH=/opt/rocm`
    - Verify compiler versions (C++17, C11 support)
+   - Ensure rocprofiler-sdk installed: `ls /opt/rocm/include/rocprofiler-sdk`
+   - Check for missing dependencies: `ldd libkernel_tracer.so`
+
+5. **Parity test failures**:
+   - Ensure both implementations updated identically
+   - Check for platform-specific differences (printf formatting, etc.)
+   - Verify atomic operations match (`std::atomic` vs `atomic_uint_fast64_t`)
+   - Compare outputs manually: `diff <(LD_PRELOAD=./libkernel_tracer.so ./example_app) <(LD_PRELOAD=./libkernel_tracer_c.so ./example_app)`
+
+6. **Test suite failures**:
+   - Run `make clean` before rebuilding
+   - Check for stale build artifacts: `rm -rf build tests/*.o`
+   - Verify ROCm environment variables set correctly
+   - Ensure GPU is accessible: `rocminfo | grep gfx`
+   - Check test permissions: `chmod +x tests/*.sh`
+
+7. **Version mismatch errors**:
+   - Run version consistency check (see Version Bump Procedures)
+   - Rebuild after version changes: `make clean && make`
+   - Check that `--version` output matches expected version
+   - Verify all 6 files updated: `grep -r "x.y.z" rpv3_options.h CHANGELOG.md TODO.md CMakeLists.txt .github/copilot-instructions.md`
+
+8. **CSV parsing issues**:
+   - Verify CSV format with `head -n 5 trace.csv`
+   - Check for quoted kernel names with commas
+   - Use `utils/summarize_trace.py` for validation
+   - Ensure CSV header is present (first line)
+
+9. **Backtrace not showing libraries**:
+   - Ensure libraries are dynamically linked (check with `ldd`)
+   - Verify `libunwind` is installed: `ldconfig -p | grep libunwind`
+   - Check that symbols are not stripped (`-g` flag)
+   - Backtrace incompatible with `--timeline` and `--csv` modes
+
+10. **Timeline mode shows zero duration**:
+    - Ensure using buffer tracing (not callback mode)
+    - Check that GPU timestamps are available
+    - Verify `rocprofiler_get_timestamp()` is working
+    - Timeline incompatible with `--backtrace` mode
+
+11. **Permission denied errors**:
+    - Check GPU device permissions: `ls -l /dev/kfd /dev/dri/render*`
+    - Verify user in correct groups: `groups` (need render, video)
+    - May need to log out/in after adding to groups
+    - Check SELinux/AppArmor policies if applicable
+
+12. **Segmentation faults**:
+    - Run with debug symbols: `make debug`
+    - Use gdb: `gdb --args env LD_PRELOAD=./libkernel_tracer.so ./example_app`
+    - Check for null pointer dereferences
+    - Verify thread safety of shared variables
+    - Enable sanitizers: `CXXFLAGS="-fsanitize=address" make`
 
 ## File Organization
 
@@ -340,11 +653,291 @@ Current version: **1.5.0**
 2. `rpv3_options.h`: `#define RPV3_VERSION "x.y.z"`
 3. `rpv3_options.h`: `RPV3_VERSION_MAJOR/MINOR/PATCH`
 4. `CHANGELOG.md`: Add new version section
+5. `TODO.md`: Update "Current Version" at bottom
+6. `.github/copilot-instructions.md`: Update version references (2 locations)
 
 **Versioning scheme** (Semantic Versioning):
 - **Major**: Breaking API changes
 - **Minor**: New features (backward compatible)
 - **Patch**: Bug fixes
+
+## Version Bump Procedures
+
+### Semantic Versioning Guidelines
+
+- **Major (x.0.0)**: Breaking API changes, incompatible modifications
+- **Minor (0.x.0)**: New features, backward compatible additions
+- **Patch (0.0.x)**: Bug fixes, documentation updates, minor improvements
+
+### Step-by-Step Version Bump Workflow
+
+#### 1. Determine Version Type
+
+Ask yourself:
+- Does this break existing functionality? → **Major**
+- Does this add new features? → **Minor**
+- Is this just a bug fix or documentation update? → **Patch**
+
+#### 2. Update Version Numbers
+
+Update the version in **all** of the following files (in order):
+
+1. **`rpv3_options.h`** (3 locations):
+   ```c
+   #define RPV3_VERSION "x.y.z"
+   #define RPV3_VERSION_MAJOR x
+   #define RPV3_VERSION_MINOR y
+   #define RPV3_VERSION_PATCH z
+   ```
+
+2. **`CMakeLists.txt`**:
+   ```cmake
+   project(rpv3 VERSION x.y.z LANGUAGES C CXX)
+   ```
+
+3. **`.github/copilot-instructions.md`** (this file):
+   - Line 336: `Current version: **x.y.z**`
+   - Update "Last Updated" date at bottom
+
+4. **`TODO.md`**:
+   - Last line: `**Current Version**: x.y.z`
+
+#### 3. Update CHANGELOG.md
+
+Add a new version section at the top (after line 9):
+
+```markdown
+## [x.y.z] - YYYY-MM-DD
+
+### Added
+- New features and capabilities
+
+### Changed
+- Modifications to existing functionality
+
+### Fixed
+- Bug fixes and corrections
+
+### Deprecated (if applicable)
+- Features marked for removal
+
+### Removed (if applicable)
+- Deleted features
+
+### Security (if applicable)
+- Security-related changes
+```
+
+**Guidelines**:
+- Use present tense for headings, past tense for descriptions
+- Be specific and link to relevant files/functions
+- Include test coverage information
+- Mention documentation updates
+
+#### 4. Update TODO.md
+
+1. Move completed items from "High Priority" to a new "Completed" section:
+   ```markdown
+   ### Version x.y.z (YYYY-MM-DD)
+   - [x] Feature that was completed
+   - [x] Bug that was fixed
+   ```
+
+2. Update the "Last Updated" date at the bottom
+
+#### 5. Run Verification Checks
+
+**CRITICAL**: Before committing version changes, verify:
+
+```bash
+# 1. Check version consistency across all files
+grep -r "x.y.z" rpv3_options.h CHANGELOG.md TODO.md CMakeLists.txt .github/copilot-instructions.md
+
+# 2. Run full test suite
+cd tests && ./run_tests.sh
+
+# 3. Verify both build systems work
+make clean && make
+rm -rf build && mkdir build && cd build && cmake .. && make
+
+# 4. Test both implementations
+LD_PRELOAD=./libkernel_tracer.so ./example_app
+LD_PRELOAD=./libkernel_tracer_c.so ./example_app
+
+# 5. Verify --version output
+RPV3_OPTIONS="--version" LD_PRELOAD=./libkernel_tracer.so ./example_app
+```
+
+#### 6. Commit Version Bump
+
+```bash
+# Single commit for version bump
+git add rpv3_options.h CMakeLists.txt CHANGELOG.md TODO.md .github/copilot-instructions.md
+git commit -m "Bump version to x.y.z"
+```
+
+#### 7. For Release Versions (Optional)
+
+If preparing for a GitHub release:
+
+1. **Review RELEASE_CHECKLIST.md** - Ensure all items are complete
+2. **Create git tag**:
+   ```bash
+   git tag -a vx.y.z -m "Release vx.y.z - Brief description"
+   git push origin vx.y.z
+   ```
+3. **Create GitHub release** with notes from CHANGELOG.md
+
+### Common Version Bump Scenarios
+
+#### Scenario 1: Bug Fix (Patch Bump)
+
+**Example**: Fixing RocBLAS pipe blocking issue
+
+```
+Current: 1.5.0 → New: 1.5.1
+```
+
+**Files to update**: rpv3_options.h, CMakeLists.txt, CHANGELOG.md, TODO.md, copilot-instructions.md
+
+**CHANGELOG entry**:
+```markdown
+## [1.5.1] - 2024-11-29
+
+### Fixed
+- Fixed RocBLAS named pipe blocking issue in timeline mode
+- Corrected error handling for empty pipe reads
+```
+
+#### Scenario 2: New Feature (Minor Bump)
+
+**Example**: Adding backtrace support
+
+```
+Current: 1.4.5 → New: 1.5.0
+```
+
+**Files to update**: Same as above + README.md (feature documentation)
+
+**CHANGELOG entry**:
+```markdown
+## [1.5.0] - 2024-11-28
+
+### Added
+- **Backtrace Support**: New `--backtrace` option to capture CPU-side call stacks
+  - Full call stack from kernel dispatch to application entry
+  - Shared library identification (RocBLAS, hipBLAS, MIOpen, etc.)
+  - Function name resolution with C++ demangling
+```
+
+#### Scenario 3: Breaking Change (Major Bump)
+
+**Example**: Changing output format or API
+
+```
+Current: 1.5.0 → New: 2.0.0
+```
+
+**Additional requirements**:
+- Update migration guide in README.md
+- Add deprecation warnings in previous version
+- Document breaking changes prominently in CHANGELOG.md
+
+**CHANGELOG entry**:
+```markdown
+## [2.0.0] - 2024-12-01
+
+### Changed
+- **BREAKING**: CSV output format now includes additional columns
+- **BREAKING**: Renamed `--output` to `--output-file` for clarity
+
+### Migration Guide
+- Update scripts parsing CSV output to handle new columns
+- Replace `--output` with `--output-file` in all invocations
+```
+
+### Version Bump Checklist
+
+Use this quick checklist for every version bump:
+
+- [ ] Determine version type (major/minor/patch)
+- [ ] Update `rpv3_options.h` (3 locations)
+- [ ] Update `CMakeLists.txt`
+- [ ] Update `CHANGELOG.md` with dated entry
+- [ ] Update `TODO.md` (move completed items)
+- [ ] Update `.github/copilot-instructions.md` (2 locations)
+- [ ] Run version consistency check (`grep -r "x.y.z" ...`)
+- [ ] Run full test suite (`./run_tests.sh`)
+- [ ] Test both build systems (Make and CMake)
+- [ ] Test both implementations (C++ and C)
+- [ ] Verify `--version` output
+- [ ] Commit with message: "Bump version to x.y.z"
+- [ ] (Optional) Create git tag for releases
+- [ ] (Optional) Update RELEASE_CHECKLIST.md status
+
+## Release Workflow
+
+For official releases, follow the comprehensive checklist in `RELEASE_CHECKLIST.md`.
+
+### Quick Release Reference
+
+1. **Pre-Release**: Complete all items in `RELEASE_CHECKLIST.md`
+2. **Version Bump**: Follow "Version Bump Procedures" above
+3. **Testing**: Run full test suite on clean build
+4. **Tagging**: Create annotated git tag
+5. **GitHub Release**: Create release with CHANGELOG notes
+
+### Release Checklist Quick Links
+
+- Full checklist: `RELEASE_CHECKLIST.md`
+- Version history: `CHANGELOG.md`
+- Roadmap: `TODO.md`
+
+### Pre-Release Verification
+
+Before creating a release tag:
+
+```bash
+# 1. Verify clean working directory
+git status
+
+# 2. Verify version consistency
+grep -r "$(grep '#define RPV3_VERSION' rpv3_options.h | cut -d'"' -f2)" \
+  rpv3_options.h CHANGELOG.md TODO.md CMakeLists.txt .github/copilot-instructions.md
+
+# 3. Run full test suite
+cd tests && ./run_tests.sh
+
+# 4. Test clean build
+make clean && make && make test
+
+# 5. Verify both implementations
+for lib in libkernel_tracer.so libkernel_tracer_c.so; do
+  echo "Testing $lib..."
+  RPV3_OPTIONS="--version" LD_PRELOAD=./$lib ./example_app
+done
+```
+
+### Release Types
+
+#### Patch Release (x.y.Z)
+- Bug fixes only
+- No new features
+- Minimal testing required
+- Can be released quickly
+
+#### Minor Release (x.Y.0)
+- New features
+- Backward compatible
+- Full test suite required
+- Update documentation
+
+#### Major Release (X.0.0)
+- Breaking changes
+- Extensive testing required
+- Migration guide needed
+- Deprecation warnings in previous version
+
 
 ## AI Assistant Guidelines
 
@@ -358,6 +951,99 @@ When helping with this project:
 6. **Explain ROCm APIs**: rocprofiler-sdk functions may be unfamiliar
 7. **Watch for threading**: Callbacks are multi-threaded, use atomics
 8. **Mind the pipes**: RocBLAS pipe handling is tricky, review carefully
+
+## Quick Start for AI Assistants
+
+### Common Task Workflows
+
+#### Task: Add a New Command-Line Option
+
+1. Edit `rpv3_options.h`: Add extern declaration
+2. Edit `rpv3_options.c`: Add variable and parsing logic
+3. Update `rpv3_print_help()` in `rpv3_options.c`
+4. Implement feature in **both** `kernel_tracer.cpp` and `kernel_tracer.c`
+5. Add unit test in `tests/test_rpv3_options.c`
+6. Add integration test in `tests/test_integration.sh`
+7. Update `README.md` with usage example
+8. Run parity test: `tests/test_parity.sh`
+9. Update `CHANGELOG.md` and `TODO.md`
+10. Bump version (see "Version Bump Procedures")
+
+#### Task: Fix a Bug
+
+1. Verify bug exists in both C and C++ implementations
+2. Fix in **both** `kernel_tracer.cpp` and `kernel_tracer.c`
+3. Add regression test to prevent recurrence
+4. Run full test suite: `cd tests && ./run_tests.sh`
+5. Update `CHANGELOG.md` under "Fixed" section
+6. Bump patch version (see "Version Bump Procedures")
+
+#### Task: Add a New Feature
+
+1. Research implementation approach (create doc in `docs/` if complex)
+2. Update `TODO.md` with implementation checklist
+3. Implement in **both** C and C++ versions
+4. Add comprehensive tests
+5. Update `README.md` with feature documentation
+6. Run all tests: `cd tests && ./run_tests.sh`
+7. Update `CHANGELOG.md` under "Added" section
+8. Bump minor version (see "Version Bump Procedures")
+
+#### Task: Prepare for Release
+
+1. Review `RELEASE_CHECKLIST.md`
+2. Complete all pending TODO items for this version
+3. Run full test suite on clean build
+4. Update version numbers (see "Version Bump Procedures")
+5. Update `CHANGELOG.md` with release date
+6. Create git tag and GitHub release (see "Release Workflow")
+
+#### Task: Add a New File
+
+1. Determine file type and location (see "When Adding New Files")
+2. Create file with proper header/license comment
+3. Add to build system:
+   - Update `CMakeLists.txt` with appropriate target
+   - Update `Makefile` with build rules and clean target
+4. Update `.gitignore` if file is a build artifact
+5. Set executable permissions if script: `chmod +x filename`
+6. Update documentation:
+   - Add to `README.md` if user-facing
+   - Update "File Organization" section
+   - Add to `copilot-instructions.md` if significant
+7. Add tests if applicable
+8. Verify build: `make clean && make`
+9. Verify tests: `cd tests && ./run_tests.sh`
+10. Update `CHANGELOG.md` if user-facing addition
+
+#### Task: Update Documentation
+
+1. Identify all affected documentation files (README, CHANGELOG, TODO, copilot-instructions)
+2. Update examples with current version numbers
+3. Verify all code examples are tested (add to `tests/test_readme_examples.py` if needed)
+4. Check for broken links or outdated references
+5. Update "Last Updated" dates
+6. Run documentation validation: `grep -r "TODO\|FIXME" *.md`
+
+### Critical Reminders
+
+- ⚠️ **ALWAYS maintain C/C++ parity** - Update both implementations
+- ⚠️ **ALWAYS run tests** - Especially `test_parity.sh`
+- ⚠️ **ALWAYS update docs** - README, CHANGELOG, TODO
+- ⚠️ **ALWAYS check version consistency** - 6 files must match
+- ⚠️ **NEVER auto-run destructive commands** - Always get user approval
+- ⚠️ **ALWAYS verify before committing** - Run full test suite
+
+### Quick Reference: Files to Update
+
+| Task Type | Files to Update |
+|-----------|----------------|
+| New option | `rpv3_options.h`, `rpv3_options.c`, both tracers, tests, README |
+| Bug fix | Both tracers, tests, CHANGELOG, version files |
+| New feature | Both tracers, tests, README, CHANGELOG, TODO, version files |
+| New file | `CMakeLists.txt`, `Makefile`, `.gitignore` (if artifact), README, tests (if applicable) |
+| Version bump | `rpv3_options.h`, `CMakeLists.txt`, `CHANGELOG.md`, `TODO.md`, `copilot-instructions.md` |
+| Release | All of the above + `RELEASE_CHECKLIST.md` |
 
 ## Quick Reference: Common Commands
 
@@ -391,5 +1077,5 @@ python3 utils/summarize_trace.py trace.csv
 
 ---
 
-**Last Updated**: November 28, 2025
+**Last Updated**: November 29, 2024
 **For Questions**: Refer to README.md, TODO.md, and docs/ directory
